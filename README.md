@@ -1,5 +1,4 @@
-# ZI-Ops
-## ZombiIsland Operations
+# ZombiIsland Operations
 
 ![ZI-Ops](https://i.postimg.cc/HsnTF6Zm/Chat-GPT-Image-19-sent-2026-g-12-54-06.png)
 
