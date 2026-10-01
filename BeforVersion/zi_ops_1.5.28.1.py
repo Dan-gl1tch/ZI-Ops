@@ -13,15 +13,14 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.5.29.0
-#    nuitka-project: --product-version=1.5.29.0
+#    nuitka-project: --file-version=1.5.28.1
+#    nuitka-project: --product-version=1.5.28.1
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import ftplib
-import io
 import random
 import urllib.request
 import urllib.error
@@ -41,7 +40,7 @@ import ctypes
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.5.29.0"
+APP_VERSION = "1.5.28.1"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -734,109 +733,75 @@ class ZI_Ops:
 
     # ===== СУДНАЯ НОЧЬ =====
     def build_judgment_tab(self):
-        self.judgment_rows = []
-        self._judgment_legacy = {}
-        panel = ttk.LabelFrame(self.tab_judgment, text=" Файлы судной ночи ", padding=10)
-        panel.pack(fill="both", expand=True, padx=10, pady=(10, 5))
-        ttk.Label(panel, text="Начало: установить при включении. Конец: установить при выключении.\n"
-                  "На противоположном этапе файл удаляется. Обе галочки — установить на обоих этапах; без галочек — не трогать.",
-                  justify="left", wraplength=850).pack(anchor="w", pady=(0, 8))
-        area = ttk.Frame(panel)
-        area.pack(fill="both", expand=True)
-        self.judgment_canvas = tk.Canvas(area, bg="#1e1e2e", highlightthickness=0, height=250)
-        self.judgment_canvas.pack(side="left", fill="both", expand=True)
-        scroll = ttk.Scrollbar(area, orient="vertical", command=self.judgment_canvas.yview)
-        scroll.pack(side="right", fill="y")
-        self.judgment_canvas.configure(yscrollcommand=scroll.set)
-        self.judgment_container = ttk.Frame(self.judgment_canvas)
-        window = self.judgment_canvas.create_window((0, 0), window=self.judgment_container, anchor="nw")
-        self.judgment_container.bind("<Configure>", lambda e: self.judgment_canvas.configure(
-            scrollregion=self.judgment_canvas.bbox("all")))
-        self.judgment_canvas.bind("<Configure>", lambda e: self.judgment_canvas.itemconfigure(window, width=e.width))
-        controls = ttk.Frame(panel)
-        controls.pack(fill="x", pady=(8, 0))
-        ttk.Button(controls, text="+ Добавить файл", command=self.add_judgment_file).pack(side="left")
-        ttk.Button(controls, text="Сохранить список", command=self.save_config).pack(side="left", padx=8)
-        ttk.Label(panel, text="Меняются только точные файлы из списка. Остальные файлы и папки не удаляются.",
-                  foreground="#89dceb", wraplength=850).pack(anchor="w", pady=(8, 0))
-        ctrl = ttk.Frame(self.tab_judgment)
-        ctrl.pack(fill="x", padx=10, pady=5)
-        ttk.Button(ctrl, text="Включить судную ночь", style="Warn.TButton",
-                   command=lambda: self.run_judgment(True)).pack(side="left")
-        ttk.Button(ctrl, text="Выключить судную ночь", style="Success.TButton",
-                   command=lambda: self.run_judgment(False)).pack(side="left", padx=8)
-        self.judg_progress = ttk.Progressbar(ctrl, mode="determinate", length=150)
+        on_frame = ttk.LabelFrame(self.tab_judgment, text=" 🔴 Включение судной ночи ", padding=10)
+        on_frame.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+        Tooltip(on_frame, "Настройки для ВКЛЮЧЕНИЯ режима Судной ночи. Удаляет PVE-плагины и загружает PVP-конфиг")
+        lbl_on_del = ttk.Label(on_frame, text="Файлы для УДАЛЕНИЯ:")
+        lbl_on_del.pack(anchor="w")
+        Tooltip(lbl_on_del, "Файлы, которые будут УДАЛЕНЫ при ВКЛЮЧЕНИИ судной ночи. Обычно это PVE-плагины (.cs) и их конфиги (.json)")
+        self.judg_on_del_text = tk.Text(on_frame, wrap="none", height=4, bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4", font=("Consolas", 9), relief="flat", bd=2)
+        self.judg_on_del_text.pack(fill="both", expand=True, pady=(2, 6))
+        for f in self.DEFAULT_JUDGMENT_ON_DELETE: self.judg_on_del_text.insert("end", f + "\n")
+        up_frame = ttk.Frame(on_frame); up_frame.pack(fill="x", pady=(0, 6))
+        lbl_up = ttk.Label(up_frame, text="Локальный файл для ЗАГРУЗКИ:")
+        lbl_up.pack(side="left")
+        Tooltip(lbl_up, "Локальный файл на твоём ПК, который будет загружен на сервер при ВКЛЮЧЕНИИ. Обычно это PVP-конфиг или плагин судной ночи")
+        self.judg_on_upload_var = tk.StringVar()
+        ttk.Entry(up_frame, textvariable=self.judg_on_upload_var, width=50).pack(side="left", padx=(6, 4), fill="x", expand=True)
+        ttk.Button(up_frame, text="Обзор...", command=lambda: self.browse_file(self.judg_on_upload_var)).pack(side="left")
+        lbl_rem = ttk.Label(on_frame, text="Удалённый путь:")
+        lbl_rem.pack(anchor="w")
+        Tooltip(lbl_rem, "Путь на сервере, куда загрузить файл. Например: oxide/plugins/JudgmentNight.cs или oxide/data/JudgmentMode.json")
+        self.judg_on_remote_var = tk.StringVar(value=self.DEFAULT_JUDGMENT_ON_REMOTE)
+        ent_rem = ttk.Entry(on_frame, textvariable=self.judg_on_remote_var)
+        ent_rem.pack(fill="x", pady=(2, 0))
+        Tooltip(ent_rem, "Укажи куда на сервере загрузить файл. Путь относительно базового пути FTP")
+        btn_on = ttk.Button(on_frame, text="🌑 Включить судную ночь", style="Warn.TButton", command=lambda: self.run_judgment(True))
+        btn_on.pack(anchor="e", pady=(8, 0))
+        Tooltip(btn_on, "Запускает процесс: удаляет указанные файлы → загружает PVP-файл на сервер. Всё через FTP.")
+
+        off_frame = ttk.LabelFrame(self.tab_judgment, text=" 🟢 Выключение судной ночи ", padding=10)
+        off_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        Tooltip(off_frame, "Настройки для ВЫКЛЮЧЕНИЯ режима Судной ночи. Удаляет PVP-плагин и возвращает PVE-файлы")
+        lbl_off_del = ttk.Label(off_frame, text="Файлы для УДАЛЕНИЯ:")
+        lbl_off_del.pack(anchor="w")
+        Tooltip(lbl_off_del, "Файлы, которые будут УДАЛЕНЫ при ВЫКЛЮЧЕНИИ судной ночи. Обычно это PVP-плагин судной ночи (.cs)")
+        self.judg_off_del_text = tk.Text(off_frame, wrap="none", height=3, bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4", font=("Consolas", 9), relief="flat", bd=2)
+        self.judg_off_del_text.pack(fill="both", expand=True, pady=(2, 6))
+        for f in self.DEFAULT_JUDGMENT_OFF_DELETE: self.judg_off_del_text.insert("end", f + "\n")
+        lbl_off_up = ttk.Label(off_frame, text="Локальные файлы для ЗАГРУЗКИ (2 файла):")
+        lbl_off_up.pack(anchor="w")
+        Tooltip(lbl_off_up, "Файлы с твоего ПК, которые вернут сервер в обычный PVE-режим. Обычно TruePVE.cs и NoMLRSMount.cs")
+        self.judg_off_upload_vars = []; self.judg_off_remote_vars = []
+        for i in range(2):
+            row = ttk.Frame(off_frame); row.pack(fill="x", pady=(2, 4))
+            ttk.Label(row, text=f"Файл {i+1}:", width=8).pack(side="left")
+            uv = tk.StringVar(value=self.DEFAULT_JUDGMENT_OFF_UPLOADS[i])
+            self.judg_off_upload_vars.append(uv)
+            ttk.Entry(row, textvariable=uv, width=40).pack(side="left", padx=(4, 4), fill="x", expand=True)
+            ttk.Button(row, text="Обзор...", command=lambda v=uv: self.browse_file(v)).pack(side="left", padx=(0, 8))
+            rv = tk.StringVar(value=self.DEFAULT_JUDGMENT_OFF_REMOTES[i])
+            self.judg_off_remote_vars.append(rv)
+            ttk.Entry(row, textvariable=rv, width=30).pack(side="left")
+        btn_off = ttk.Button(off_frame, text="☀️ Выключить судную ночь", style="Success.TButton", command=lambda: self.run_judgment(False))
+        btn_off.pack(anchor="e", pady=(8, 0))
+        Tooltip(btn_off, "Запускает процесс: удаляет PVP-файл → загружает 2 PVE-файла на сервер. Возвращает обычный режим.")
+
+        ctrl = ttk.Frame(self.tab_judgment); ctrl.pack(fill="x", padx=10, pady=(5, 5))
+        self.judg_progress = ttk.Progressbar(ctrl, mode="determinate", length=200)
         self.judg_progress.pack(side="right")
         self.judg_status_var = tk.StringVar(value="Готов")
         ttk.Label(ctrl, textvariable=self.judg_status_var).pack(side="right", padx=8)
+
         log_frame = ttk.LabelFrame(self.tab_judgment, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
-        self.judg_log = tk.Text(log_frame, wrap="word", state="disabled", height=8,
-                                bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat")
-        self.judg_log.pack(side="left", fill="both", expand=True)
-        scroll_log = ttk.Scrollbar(log_frame, orient="vertical", command=self.judg_log.yview)
-        scroll_log.pack(side="right", fill="y")
-        self.judg_log.configure(yscrollcommand=scroll_log.set)
+        log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
+        self.judg_log = tk.Text(log_frame, wrap="word", state="disabled", bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat", bd=2)
+        self.judg_log.grid(row=0, column=0, sticky="nsew")
+        ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.judg_log.yview)
+        ls.grid(row=0, column=1, sticky="ns")
+        self.judg_log.config(yscrollcommand=ls.set)
         self._config_log_tags(self.judg_log)
-
-    def add_judgment_file(self):
-        local = filedialog.askopenfilename(title="Файл для судной ночи",
-            filetypes=[("Плагины и конфиги", "*.cs *.json"), ("Все файлы", "*.*")])
-        if local:
-            self._add_judgment_row(local)
-
-    def _add_judgment_row(self, local, folder="oxide/plugins/", start=False, end=False):
-        frame = ttk.Frame(self.judgment_container, padding=(4, 8))
-        frame.pack(fill="x")
-        frame.columnconfigure(2, weight=1)
-        row = {"frame": frame, "local": tk.StringVar(value=local),
-               "name": tk.StringVar(value=os.path.basename(local)),
-               "folder": tk.StringVar(value=folder),
-               "start": tk.BooleanVar(value=start), "end": tk.BooleanVar(value=end)}
-        def browse():
-            selected = filedialog.askopenfilename(title="Выбрать файл", initialfile=row["name"].get())
-            if selected:
-                row["local"].set(selected)
-                row["name"].set(os.path.basename(selected))
-        def remove():
-            self.judgment_rows.remove(row)
-            frame.destroy()
-        ttk.Button(frame, text="Обзор...", command=browse).grid(row=0, column=0, padx=(0, 8))
-        ttk.Label(frame, textvariable=row["name"]).grid(row=0, column=1, columnspan=2, sticky="w")
-        ttk.Checkbutton(frame, text="Начало ночи", variable=row["start"]).grid(row=0, column=3, padx=8)
-        ttk.Checkbutton(frame, text="Конец ночи", variable=row["end"]).grid(row=0, column=4, padx=8)
-        ttk.Button(frame, text="×", width=3, command=remove).grid(row=0, column=5)
-        ttk.Label(frame, text="Куда/откуда:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
-        ttk.Entry(frame, textvariable=row["folder"]).grid(row=1, column=2, columnspan=4, sticky="ew", pady=(6, 0))
-        Tooltip(frame, "Укажи папку относительно базового FTP-пути, например oxide/plugins/. Имя файла берётся с ПК.")
-        self.judgment_rows.append(row)
-
-    def _judgment_entries(self):
-        return [{key: row[key].get() for key in ("local", "folder", "start", "end")}
-                for row in self.judgment_rows]
-
-    def _load_judgment_entries(self, data):
-        entries = data.get("judgment_files", [])
-        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
-            raise ValueError("Список судной ночи должен содержать записи файлов.")
-        for entry in entries:
-            if not isinstance(entry.get("local", ""), str) or not isinstance(entry.get("folder", ""), str):
-                raise ValueError("Пути судной ночи должны быть строками.")
-            if not isinstance(entry.get("start", False), bool) or not isinstance(entry.get("end", False), bool):
-                raise ValueError("Отметки начала и конца должны быть галочками.")
-        for row in self.judgment_rows:
-            row["frame"].destroy()
-        self.judgment_rows.clear()
-        for entry in entries:
-            self._add_judgment_row(entry.get("local", ""), entry.get("folder", ""),
-                                   entry.get("start", False), entry.get("end", False))
-        self._judgment_legacy = data.get("judgment_legacy", {})
-        if "judgment_files" not in data:
-            self._judgment_legacy = {key: value for key, value in data.items() if key.startswith("judg_")}
-            if self._judgment_legacy:
-                self.log(self.judg_log, "Старые настройки сохранены, но не запускаются автоматически. "
-                         "Добавь нужные файлы через «+» и отметь этапы.", "yellow")
-
 
     # ===== RCON =====
     def build_rcon_tab(self):
@@ -2246,172 +2211,82 @@ class ZI_Ops:
         self.wipe_status_var.set("Готов")
         self.wipe_progress["value"] = 100
 
-    def _plan_judgment(self, entries, on, base):
-        uploads, deletes, seen = [], [], set()
-        if any(c in base for c in "*?[]\r\n\x00"):
-            raise ValueError("Недопустимый базовый FTP-путь.")
-        for entry in entries:
-            start, end = entry["start"], entry["end"]
-            if not start and not end:
-                continue
-            local = entry["local"].strip()
-            folder = entry["folder"].strip().replace("\\", "/")
-            filename = os.path.basename(local)
-            if not filename or filename in (".", "..") or any(c in filename + folder for c in "*?[]\r\n\x00"):
-                raise ValueError("Недопустимое имя файла или папка в списке судной ночи.")
-            if not folder:
-                raise ValueError(f"Не указана папка для {filename}.")
-            target = self._remote_path(base, posixpath.join(folder, filename))
-            if target.casefold() in seen:
-                raise ValueError(f"Повторяется путь на сервере: {target}.")
-            seen.add(target.casefold())
-            if (start if on else end):
-                if not os.path.isfile(local):
-                    raise ValueError(f"Файл для установки не найден: {local}. На сервере ничего не изменено.")
-                uploads.append((local, target))
-            else:
-                deletes.append(target)
-        return uploads, deletes
-
     def run_judgment(self, on):
         with self.running_lock:
             if self._running:
-                self.log(self.judg_log, "Другая операция уже выполняется.", "yellow")
-                return
-        try:
-            uploads, deletes = self._plan_judgment(self._judgment_entries(), on, self.base_var.get().strip())
-            if not uploads and not deletes:
-                self.log(self.judg_log, "Нет отмеченных файлов. На сервере ничего не изменено.", "yellow")
-                return
-        except ValueError as exc:
-            messagebox.showerror("Судная ночь", str(exc))
-            return
-        cfg = {"ftp": self._snapshot_ftp_config(), "uploads": uploads, "delete": deletes}
-        with self.running_lock:
-            if self._running:
+                self.log(self.judg_log, "⚠️ Другая операция уже выполняется.", "yellow")
                 return
             self._running = True
-        self.stop_event.clear()
+
+        cfg = {
+            "base": self.base_var.get().strip(),
+            "ftp": self._snapshot_ftp_config(),
+            "on": bool(on),
+            "delete": self._clean_lines((self.judg_on_del_text if on else self.judg_off_del_text).get("1.0", "end")),
+            "uploads": [],
+        }
+        if on:
+            cfg["uploads"].append((self.judg_on_upload_var.get().strip(), self.judg_on_remote_var.get().strip()))
+        else:
+            for uv, rv in zip(self.judg_off_upload_vars, self.judg_off_remote_vars):
+                cfg["uploads"].append((uv.get().strip(), rv.get().strip()))
+
         self.judg_progress["value"] = 0
-        self.judg_status_var.set("Проверка и резервные копии...")
+        self.judg_status_var.set("Подключение...")
         threading.Thread(target=self._judgment_worker, args=(cfg,), daemon=True, name="judgment-worker").start()
 
     def _judgment_worker(self, cfg):
-        ftp, backup_dir = None, None
-        originals, touched = {}, []
-        success = False
+        ftp = None
         try:
-            # Read every installation file before connecting or touching server files.
-            payloads = []
-            for local, target in cfg["uploads"]:
-                with open(local, "rb") as source:
-                    payloads.append((target, source.read()))
             ftp = self.ftp_connect(self.judg_log, cfg["ftp"])
             if not ftp:
-                raise RuntimeError("Не удалось подключиться к FTP; файлы не изменены.")
-            targets = [target for target, _ in payloads] + cfg["delete"]
-            root = os.path.join(self.script_dir, "JudgmentBackups")
-            os.makedirs(root, exist_ok=True)
-            backup_dir = tempfile.mkdtemp(prefix=time.strftime("%Y%m%d_%H%M%S_"), dir=root)
-            listings, manifest = {}, []
-            for index, target in enumerate(targets):
-                if self.stop_event.is_set():
-                    raise RuntimeError("Операция остановлена до изменения файлов.")
-                folder = posixpath.dirname(target) or "."
-                if folder not in listings:
-                    # A listing error is fatal: never treat access denied as an absent file.
-                    listings[folder] = {self._remote_basename(name) for name in ftp.nlst(folder)}
-                exists = posixpath.basename(target) in listings[folder]
-                saved = os.path.join(backup_dir, f"{index:04d}.bak") if exists else None
-                if exists:
-                    with open(saved, "wb") as dest:
-                        ftp.retrbinary(f"RETR {target}", dest.write)
-                originals[target] = saved
-                manifest.append({"remote": target, "backup": os.path.basename(saved) if saved else None})
-            with open(os.path.join(backup_dir, "manifest.json"), "w", encoding="utf-8") as dest:
-                json.dump(manifest, dest, ensure_ascii=False, indent=2)
-            self.log(self.judg_log, f"Резервные копии: {backup_dir}", "cyan")
-            total = len(targets)
+                return
+            base = cfg["base"]
+            ops = len(cfg["delete"]) + len([x for x in cfg["uploads"] if x[0] and x[1]])
             done = 0
-            # All incoming files are installed and read back before removing the opposite set.
-            for target, content in payloads:
-                if self.stop_event.is_set():
-                    raise RuntimeError("Операция остановлена; восстанавливаем файлы.")
-                touched.append(target)
-                ftp.storbinary(f"STOR {target}", io.BytesIO(content))
-                check = io.BytesIO()
-                ftp.retrbinary(f"RETR {target}", check.write)
-                if check.getvalue() != content:
-                    raise RuntimeError(f"Проверка загрузки не пройдена: {target}")
-                self.log(self.judg_log, f"Установлено и проверено: {target}", "green")
+
+            for item in cfg["delete"]:
+                remote = self._remote_path(base, item)
+                try:
+                    ftp.delete(remote)
+                    self.log(self.judg_log, f"🗑️ Удалено: {remote}", "green")
+                except ftplib.error_perm as e:
+                    self.log(self.judg_log, f"ℹ️ Уже отсутствует/не удалено: {remote} ({e})", "yellow")
                 done += 1
-                self._set_progress(self.judg_progress, self.judg_status_var, done / total * 100, "Установка...")
-            for target in cfg["delete"]:
-                if self.stop_event.is_set():
-                    raise RuntimeError("Операция остановлена; восстанавливаем файлы.")
-                if originals[target] is not None:
-                    touched.append(target)
-                    ftp.delete(target)
-                    self.log(self.judg_log, f"Удалено из списка: {target}", "green")
-                else:
-                    self.log(self.judg_log, f"Уже отсутствует: {target}", "yellow")
+                self._set_progress(self.judg_progress, self.judg_status_var, done/max(ops,1)*100, f"{int(done/max(ops,1)*100)}%")
+
+            for local, remote in cfg["uploads"]:
+                if not local or not remote:
+                    self.log(self.judg_log, "⚠️ Пропущена загрузка: не указан локальный или удалённый путь.", "yellow")
+                    continue
+                if not os.path.isfile(local):
+                    self.log(self.judg_log, f"❌ Локальный файл не найден: {local}", "red")
+                    continue
+                if remote.endswith("/"):
+                    remote = remote + os.path.basename(local)
+                remote_path = self._remote_path(base, remote)
+                with open(local, "rb") as f:
+                    ftp.storbinary(f"STOR {remote_path}", f)
+                self.log(self.judg_log, f"⬆️ Загружено: {remote_path}", "green")
                 done += 1
-                self._set_progress(self.judg_progress, self.judg_status_var, done / total * 100, "Удаление...")
-            success = True
-            self.log(self.judg_log, "Судная ночь: операция завершена. Остальные файлы не изменены.", "green")
-        except Exception as exc:
-            self.log(self.judg_log, f"Ошибка: {exc}", "red")
-            if touched:
-                self.log(self.judg_log, "Восстанавливаем затронутые файлы из резервной копии...", "yellow")
-                # Use a fresh connection: a failed upload may leave the old data channel unusable.
-                if ftp:
-                    try: ftp.close()
-                    except Exception: pass
-                ftp = self.ftp_connect(self.judg_log, cfg["ftp"])
-                failures = []
-                for target in reversed(touched):
-                    try:
-                        if ftp is None:
-                            raise RuntimeError("Нет FTP-подключения")
-                        saved = originals[target]
-                        if saved is not None:
-                            with open(saved, "rb") as source:
-                                content = source.read()
-                            ftp.storbinary(f"STOR {target}", io.BytesIO(content))
-                            check = io.BytesIO()
-                            ftp.retrbinary(f"RETR {target}", check.write)
-                            if check.getvalue() != content:
-                                raise RuntimeError("Не пройдена проверка восстановления")
-                        else:
-                            folder = posixpath.dirname(target) or "."
-                            names = {self._remote_basename(name) for name in ftp.nlst(folder)}
-                            if posixpath.basename(target) in names:
-                                ftp.delete(target)
-                        self.log(self.judg_log, f"Восстановлено: {target}", "yellow")
-                    except Exception as restore_exc:
-                        failures.append(target)
-                        self.log(self.judg_log, f"Не удалось восстановить {target}: {restore_exc}", "red")
-                if failures:
-                    self.log(self.judg_log, f"Нужно ручное восстановление: {backup_dir}. Файлы: " + ", ".join(failures), "red")
-                else:
-                    self.log(self.judg_log, "Предыдущее содержимое затронутых файлов восстановлено.", "yellow")
-            else:
-                self.log(self.judg_log, "Файлы сервера не изменены.", "yellow")
+                self._set_progress(self.judg_progress, self.judg_status_var, done/max(ops,1)*100, f"{int(done/max(ops,1)*100)}%")
+
+            self.log(self.judg_log, "\n✅ Операция завершена.", "green")
+        except Exception as e:
+            self.log(self.judg_log, f"❌ Ошибка: {e}", "red")
         finally:
             if ftp:
                 try: ftp.quit()
                 except Exception:
                     try: ftp.close()
                     except Exception: pass
-            self.root.after(0, lambda ok=success: self._judgment_done(ok))
+            self.root.after(0, self._judgment_done)
 
-    def _judgment_done(self, success=False):
+    def _judgment_done(self):
         with self.running_lock:
             self._running = False
-        self.judg_status_var.set("Готов" if success else "Ошибка — смотри лог")
-        if success:
-            self.judg_progress["value"] = 100
-
+        self.judg_status_var.set("Готов")
+        self.judg_progress["value"] = 100
 
     def rcon_connect(self):
         if not WEBSOCKET_OK:
@@ -2753,7 +2628,18 @@ class ZI_Ops:
             self.api_key_var.set(data.get("api_key", ""))
             self.ftps_var.set(data.get("ftps", False))
             # Judgment
-            self._load_judgment_entries(data)
+            if "judg_on_del" in data:
+                self.judg_on_del_text.delete("1.0", "end")
+                self.judg_on_del_text.insert("1.0", data.get("judg_on_del", ""))
+            self.judg_on_upload_var.set(data.get("judg_on_upload", ""))
+            self.judg_on_remote_var.set(data.get("judg_on_remote", self.DEFAULT_JUDGMENT_ON_REMOTE))
+            if "judg_off_del" in data:
+                self.judg_off_del_text.delete("1.0", "end")
+                self.judg_off_del_text.insert("1.0", data.get("judg_off_del", ""))
+            self.judg_off_upload_vars[0].set(data.get("judg_off_upload_0", ""))
+            self.judg_off_upload_vars[1].set(data.get("judg_off_upload_1", ""))
+            self.judg_off_remote_vars[0].set(data.get("judg_off_remote_0", self.DEFAULT_JUDGMENT_OFF_REMOTES[0]))
+            self.judg_off_remote_vars[1].set(data.get("judg_off_remote_1", self.DEFAULT_JUDGMENT_OFF_REMOTES[1]))
             # Wipe
             if "wipe_files" in data:
                 self.wipe_files_text.delete("1.0", "end")
@@ -2811,8 +2697,14 @@ class ZI_Ops:
             "ftps": self.ftps_var.get(),
             "custom_plugins": sorted(self.custom_plugins),
             "plugins_server_path": self.plugins_server_path_var.get(),
-            "judgment_files": self._judgment_entries(),
-            "judgment_legacy": self._judgment_legacy,
+            "judg_on_del": self.judg_on_del_text.get("1.0", "end").strip(),
+            "judg_on_upload": self.judg_on_upload_var.get(),
+            "judg_on_remote": self.judg_on_remote_var.get(),
+            "judg_off_del": self.judg_off_del_text.get("1.0", "end").strip(),
+            "judg_off_upload_0": self.judg_off_upload_vars[0].get(),
+            "judg_off_upload_1": self.judg_off_upload_vars[1].get(),
+            "judg_off_remote_0": self.judg_off_remote_vars[0].get(),
+            "judg_off_remote_1": self.judg_off_remote_vars[1].get(),
             "wipe_files": self.wipe_files_text.get("1.0", "end").strip(),
             "wipe_folders": self.wipe_folders_text.get("1.0", "end").strip(),
             "wipe_cfg_template": self.wipe_cfg_template_var.get(),
