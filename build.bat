@@ -1,0 +1,1 @@
+python -m PyInstaller --clean --onefile --noconsole --name "ZI-Ops" --icon="ZI-Ops.ico" --version-file="zi_ops_version.txt" zi_ops.py
