@@ -1,7 +1,7 @@
 # ZI-Ops
 ## ZombiIsland Operations
 
-![ZI-Ops](https://previews.dropbox.com/p/thumb/ADLPa8W4ItrOJcaLJcn14YHaSLtDChNz8JfK3-jgiKDbYeMgHTc_xRONLNdcBvR3sIiEJJPsaZtwqmDrriViNjYxzw1oUqKxCTij-RS5Qrbo9AP4gf5OtK2J-RXmINQJW28FA2iP7PMQfu9NDAU2OfHJSVWEvMdATnWJ3uZAkZ0IG6IY14vTNmgLkpvw1FdsXSUczIi6HfUnvmbocB-cxQfqBNty4LxBOKGJnWHLs3QKxwuoBKP_ufYABdWSUbu9XwoT22VnBIAMF-CCkfujHk1oodP-_89I5UJQoUwTCxYlPfPbXjdfUJRcDEfQfTUVFDfPY5JMp3dRQxQN6pxGuYmI/p.png)
+![ZI-Ops](https://www.dropbox.com/home?preview=ZI-PVE.png)
 
 Программа для управления сервером Rust с рабочего стола Windows. Работает с файлами сервера через FTP/FTPS, отправляет команды через RCON и обращается к RustMaps для генерации карт по seed и размеру.
 
