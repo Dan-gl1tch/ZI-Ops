@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.5.30.0
-#    nuitka-project: --product-version=1.5.30.0
+#    nuitka-project: --file-version=1.5.29.0
+#    nuitka-project: --product-version=1.5.29.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -41,7 +41,7 @@ import ctypes
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.5.30.0"
+APP_VERSION = "1.5.29.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -59,19 +59,6 @@ try:
     WEBSOCKET_OK = True
 except ImportError:
     WEBSOCKET_OK = False
-
-
-_ACTIVE_THEME = "dark"
-_LIGHT_COLORS = {
-    "#181825": "#ffffff", "#1e1e2e": "#f3f5fa", "#313244": "#e5eaf3",
-    "#45475a": "#d6dfec", "#585b70": "#c3d5ef", "#cdd6f4": "#243247",
-    "#89b4fa": "#245eac", "#89dceb": "#146879", "#a6e3a1": "#24713f",
-    "#cba6f7": "#7750a7", "#f38ba8": "#b52d46", "#f9e2af": "#876113",
-}
-
-
-def _theme_color(color):
-    return _LIGHT_COLORS.get(color.lower(), color) if _ACTIVE_THEME == "light" else color
 
 
 class Tooltip:
@@ -110,9 +97,9 @@ class Tooltip:
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
-        tw.configure(bg=_theme_color("#313244"))
+        tw.configure(bg="#313244")
         label = tk.Label(tw, text=self.text, justify="left",
-                         background=_theme_color("#313244"), foreground=_theme_color("#cdd6f4"),
+                         background="#313244", foreground="#cdd6f4",
                          relief="solid", borderwidth=1,
                          font=("Segoe UI", 9), padx=8, pady=4,
                          wraplength=350)
@@ -326,13 +313,10 @@ class ZI_Ops:
 
     def __init__(self, root):
         self.root = root
-        self.theme_mode = "dark"
-        global _ACTIVE_THEME
-        _ACTIVE_THEME = "dark"
         self.root.title(APP_NAME)
         self.root.geometry("1050x900")
         self.root.minsize(950, 750)
-        self.root.configure(bg=_theme_color("#1e1e2e"))
+        self.root.configure(bg="#1e1e2e")
         self.style = ttk.Style()
         self.style.theme_use("clam")
         self.configure_styles()
@@ -359,16 +343,16 @@ class ZI_Ops:
                 "Библиотека websocket-client не установлена.\nRCON-функции недоступны.\n\nУстанови: pip install websocket-client"))
 
     def configure_styles(self):
-        bg, fg, accent, surface = _theme_color("#1e1e2e"), _theme_color("#cdd6f4"), _theme_color("#89b4fa"), _theme_color("#313244")
-        red, green, yellow, mauve = _theme_color("#f38ba8"), _theme_color("#a6e3a1"), _theme_color("#f9e2af"), _theme_color("#cba6f7")
+        bg, fg, accent, surface = "#1e1e2e", "#cdd6f4", "#89b4fa", "#313244"
+        red, green, yellow, mauve = "#f38ba8", "#a6e3a1", "#f9e2af", "#cba6f7"
         self.style.configure("TFrame", background=bg)
         self.style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
         self.style.configure("TButton", background=surface, foreground=fg, font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("Accent.TButton", background=accent, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("Danger.TButton", background=red, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("Success.TButton", background=green, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("Warn.TButton", background=yellow, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("Purple.TButton", background=mauve, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
+        self.style.configure("Accent.TButton", background=accent, foreground="#1e1e2e", font=("Segoe UI", 10, "bold"), padding=6)
+        self.style.configure("Danger.TButton", background=red, foreground="#1e1e2e", font=("Segoe UI", 10, "bold"), padding=6)
+        self.style.configure("Success.TButton", background=green, foreground="#1e1e2e", font=("Segoe UI", 10, "bold"), padding=6)
+        self.style.configure("Warn.TButton", background=yellow, foreground="#1e1e2e", font=("Segoe UI", 10, "bold"), padding=6)
+        self.style.configure("Purple.TButton", background=mauve, foreground="#1e1e2e", font=("Segoe UI", 10, "bold"), padding=6)
         self.style.configure("TEntry", fieldbackground=surface, foreground=fg, insertcolor=fg)
         self.style.configure("TCheckbutton", background=bg, foreground=fg)
         self.style.configure("Horizontal.TProgressbar", background=accent, troughcolor=surface)
@@ -376,81 +360,21 @@ class ZI_Ops:
         self.style.configure("TLabelframe.Label", background=bg, foreground=accent, font=("Segoe UI", 10, "bold"))
         # Treeview dark theme
         self.style.configure("Treeview",
-                             background=_theme_color("#313244"),
-                             foreground=_theme_color("#cdd6f4"),
-                             fieldbackground=_theme_color("#313244"),
+                             background="#313244",
+                             foreground="#cdd6f4",
+                             fieldbackground="#313244",
                              font=("Segoe UI", 9),
                              rowheight=22)
         self.style.configure("Treeview.Heading",
-                             background=_theme_color("#45475a"),
-                             foreground=_theme_color("#cdd6f4"),
+                             background="#45475a",
+                             foreground="#cdd6f4",
                              font=("Segoe UI", 10, "bold"),
                              relief="flat")
         self.style.map("Treeview",
-                       background=[("selected", _theme_color("#585b70")), ("!selected", _theme_color("#313244"))],
-                       foreground=[("selected", _theme_color("#cdd6f4")), ("!selected", _theme_color("#cdd6f4"))])
+                       background=[("selected", "#585b70"), ("!selected", "#313244")],
+                       foreground=[("selected", "#cdd6f4"), ("!selected", "#cdd6f4")])
         self.style.map("Treeview.Heading",
-                       background=[("active", _theme_color("#585b70")), ("pressed", _theme_color("#585b70"))])
-
-        self.style.configure("TNotebook", background=bg, borderwidth=0)
-        self.style.configure("TNotebook.Tab", background=surface, foreground=fg, padding=(10, 6))
-        self.style.map("TNotebook.Tab", background=[("selected", bg), ("active", surface)],
-                       foreground=[("selected", accent), ("!selected", fg)])
-        self.style.map("TButton", background=[("active", _theme_color("#45475a"))], foreground=[("disabled", _theme_color("#585b70"))])
-        self.style.map("TCheckbutton", background=[("active", bg)], foreground=[("active", fg)])
-        self.style.configure("TScrollbar", background=surface, troughcolor=bg, arrowcolor=fg)
-        self.style.configure("TCombobox", fieldbackground=surface, foreground=fg, arrowcolor=fg)
-        for name, color in (("Accent", accent), ("Danger", red), ("Success", green), ("Warn", yellow), ("Purple", mauve)):
-            self.style.map(name + ".TButton", background=[("active", color), ("!disabled", color)],
-                           foreground=[("!disabled", bg)])
-
-    def toggle_theme(self):
-        self.apply_theme("light" if self.theme_mode == "dark" else "dark")
-        self.save_config(silent=True)
-
-    def apply_theme(self, mode):
-        global _ACTIVE_THEME
-        self.theme_mode = mode if mode in ("dark", "light") else "dark"
-        _ACTIVE_THEME = self.theme_mode
-        self.configure_styles()
-        inverse = {light: dark for dark, light in _LIGHT_COLORS.items()}
-
-        def recolor(value):
-            value = str(value).lower()
-            dark = inverse.get(value, value)
-            return _theme_color(dark)
-
-        def visit(widget):
-            options = widget.keys()
-            for option in ("background", "foreground", "insertbackground", "selectbackground",
-                           "selectforeground", "highlightbackground", "highlightcolor",
-                           "activebackground", "activeforeground", "disabledforeground"):
-                if option in options:
-                    value = widget.cget(option)
-                    if str(value).lower() in _LIGHT_COLORS or str(value).lower() in inverse:
-                        widget.configure(**{option: recolor(value)})
-            if isinstance(widget, tk.Text):
-                for tag in widget.tag_names():
-                    for option in ("foreground", "background"):
-                        value = widget.tag_cget(tag, option)
-                        if value:
-                            widget.tag_configure(tag, **{option: recolor(value)})
-            elif isinstance(widget, ttk.Treeview):
-                tags = {tag for item in widget.get_children() for tag in widget.item(item, "tags")}
-                tags.update(("green", "red", "yellow"))
-                for tag in tags:
-                    settings = widget.tag_configure(tag)
-                    for option in ("foreground", "background"):
-                        value = settings.get(option)
-                        if value:
-                            widget.tag_configure(tag, **{option: recolor(value)})
-            for child in widget.winfo_children():
-                visit(child)
-
-        visit(self.root)
-        if hasattr(self, "theme_button"):
-            self.theme_button.configure(text="Тема: светлая" if self.theme_mode == "light" else "Тема: тёмная")
-
+                       background=[("active", "#585b70"), ("pressed", "#585b70")])
 
     def _set_icon(self):
         """Устанавливает иконку окна из встроенного base64 GIF (буквы ZI)."""
@@ -596,14 +520,14 @@ class ZI_Ops:
         close_button.pack(side="right", padx=(8, 0))
         body = ttk.Frame(panel)
         body.pack(fill="both", expand=True)
-        text = tk.Text(body, wrap="word", bg=_theme_color("#313244"), fg=_theme_color("#cdd6f4"),
+        text = tk.Text(body, wrap="word", bg="#313244", fg="#cdd6f4",
                        font=("Segoe UI", 11), relief="flat", padx=12, pady=12)
         text.pack(side="left", fill="both", expand=True)
         scrollbar = ttk.Scrollbar(body, orient="vertical", command=text.yview)
         scrollbar.pack(side="right", fill="y")
         text.configure(yscrollcommand=scrollbar.set)
-        text.tag_configure("title", font=("Segoe UI", 12, "bold"), foreground=_theme_color("#89dceb"))
-        text.tag_configure("warning", font=("Segoe UI", 12, "bold"), foreground=_theme_color("#f9e2af"))
+        text.tag_configure("title", font=("Segoe UI", 12, "bold"), foreground="#89dceb")
+        text.tag_configure("warning", font=("Segoe UI", 12, "bold"), foreground="#f9e2af")
         sections = (
             ("Seed и Map Size\n", "title",
              "Некоторые серверы не используют параметры Seed и Map Size из server.cfg: "
@@ -685,7 +609,7 @@ class ZI_Ops:
         Tooltip(btn_pr, "Предпросмотр содержимого server.cfg без изменений")
 
         ttk.Label(seed_frame, text="📥 Скачай server.cfg с сервера через FTP → укажи путь здесь  |  ✅ Оригинал на ПК НЕ изменится",
-                  foreground=_theme_color("#89dceb")).grid(row=2, column=0, columnspan=5, sticky="w", padx=4)
+                  foreground="#89dceb").grid(row=2, column=0, columnspan=5, sticky="w", padx=4)
 
         self.wipe_random_seed_var = tk.BooleanVar(value=True)
         cb_rand = ttk.Checkbutton(seed_frame, text="Случайный seed", variable=self.wipe_random_seed_var,
@@ -714,9 +638,9 @@ class ZI_Ops:
         ent_ws = ttk.Entry(seed_frame, textvariable=self.wipe_worldsize_var, width=10)
         ent_ws.grid(row=4, column=1, sticky="w", padx=4)
         Tooltip(ent_ws, "Размер карты в метрах. 4250 — стандарт для большинства серверов")
-        ttk.Label(seed_frame, text="(например: 3000, 3500, 4250, 5000 — как на rustmaps.com)", foreground=_theme_color("#89dceb")).grid(row=4, column=2, columnspan=3, sticky="w", padx=4)
+        ttk.Label(seed_frame, text="(например: 3000, 3500, 4250, 5000 — как на rustmaps.com)", foreground="#89dceb").grid(row=4, column=2, columnspan=3, sticky="w", padx=4)
 
-        ttk.Label(seed_frame, text="📋 Если шаблон не указан — seed скопируется в буфер обмена", foreground=_theme_color("#89dceb")).grid(row=5, column=0, columnspan=5, sticky="w", padx=4, pady=(4, 0))
+        ttk.Label(seed_frame, text="📋 Если шаблон не указан — seed скопируется в буфер обмена", foreground="#89dceb").grid(row=5, column=0, columnspan=5, sticky="w", padx=4, pady=(4, 0))
 
         self.wipe_restart_var = tk.BooleanVar(value=False)
         cb_restart = ttk.Checkbutton(seed_frame, text="Отправить рестарт через RCON после очистки",
@@ -745,8 +669,8 @@ class ZI_Ops:
         files_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(files_frame, "Список файлов, которые будут удалены с сервера через FTP при вайпе. Указывай пути относительно базового пути")
         files_frame.rowconfigure(0, weight=1); files_frame.columnconfigure(0, weight=1)
-        self.wipe_files_text = tk.Text(files_frame, wrap="none", height=8, bg=_theme_color("#313244"), fg=_theme_color("#cdd6f4"),
-                                       insertbackground=_theme_color("#cdd6f4"), font=("Consolas", 9), relief="flat", bd=2)
+        self.wipe_files_text = tk.Text(files_frame, wrap="none", height=8, bg="#313244", fg="#cdd6f4",
+                                       insertbackground="#cdd6f4", font=("Consolas", 9), relief="flat", bd=2)
         self.wipe_files_text.grid(row=0, column=0, sticky="nsew")
         for f in self.DEFAULT_WIPE_FILES: self.wipe_files_text.insert("end", f + "\n")
         fs = ttk.Scrollbar(files_frame, orient="vertical", command=self.wipe_files_text.yview)
@@ -767,8 +691,8 @@ class ZI_Ops:
         folders_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(folders_frame, "Список папок, содержимое которых будет полностью удалено с сервера (включая подпапки и файлы)")
         folders_frame.rowconfigure(0, weight=1); folders_frame.columnconfigure(0, weight=1)
-        self.wipe_folders_text = tk.Text(folders_frame, wrap="none", height=4, bg=_theme_color("#313244"), fg=_theme_color("#cdd6f4"),
-                                         insertbackground=_theme_color("#cdd6f4"), font=("Consolas", 9), relief="flat", bd=2)
+        self.wipe_folders_text = tk.Text(folders_frame, wrap="none", height=4, bg="#313244", fg="#cdd6f4",
+                                         insertbackground="#cdd6f4", font=("Consolas", 9), relief="flat", bd=2)
         self.wipe_folders_text.grid(row=0, column=0, sticky="nsew")
         for f in self.DEFAULT_WIPE_FOLDERS: self.wipe_folders_text.insert("end", f + "\n")
         fs2 = ttk.Scrollbar(folders_frame, orient="vertical", command=self.wipe_folders_text.yview)
@@ -800,7 +724,7 @@ class ZI_Ops:
         log_frame = ttk.LabelFrame(self.tab_wipe, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
-        self.wipe_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"),
+        self.wipe_log = tk.Text(log_frame, wrap="word", state="disabled", bg="#181825", fg="#cdd6f4",
                                 font=("Consolas", 10), relief="flat", bd=2)
         self.wipe_log.grid(row=0, column=0, sticky="nsew")
         ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.wipe_log.yview)
@@ -819,7 +743,7 @@ class ZI_Ops:
                   justify="left", wraplength=850).pack(anchor="w", pady=(0, 8))
         area = ttk.Frame(panel)
         area.pack(fill="both", expand=True)
-        self.judgment_canvas = tk.Canvas(area, bg=_theme_color("#1e1e2e"), highlightthickness=0, height=250)
+        self.judgment_canvas = tk.Canvas(area, bg="#1e1e2e", highlightthickness=0, height=250)
         self.judgment_canvas.pack(side="left", fill="both", expand=True)
         scroll = ttk.Scrollbar(area, orient="vertical", command=self.judgment_canvas.yview)
         scroll.pack(side="right", fill="y")
@@ -834,7 +758,7 @@ class ZI_Ops:
         ttk.Button(controls, text="+ Добавить файл", command=self.add_judgment_file).pack(side="left")
         ttk.Button(controls, text="Сохранить список", command=self.save_config).pack(side="left", padx=8)
         ttk.Label(panel, text="Меняются только точные файлы из списка. Остальные файлы и папки не удаляются.",
-                  foreground=_theme_color("#89dceb"), wraplength=850).pack(anchor="w", pady=(8, 0))
+                  foreground="#89dceb", wraplength=850).pack(anchor="w", pady=(8, 0))
         ctrl = ttk.Frame(self.tab_judgment)
         ctrl.pack(fill="x", padx=10, pady=5)
         ttk.Button(ctrl, text="Включить судную ночь", style="Warn.TButton",
@@ -848,7 +772,7 @@ class ZI_Ops:
         log_frame = ttk.LabelFrame(self.tab_judgment, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         self.judg_log = tk.Text(log_frame, wrap="word", state="disabled", height=8,
-                                bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat")
+                                bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat")
         self.judg_log.pack(side="left", fill="both", expand=True)
         scroll_log = ttk.Scrollbar(log_frame, orient="vertical", command=self.judg_log.yview)
         scroll_log.pack(side="right", fill="y")
@@ -996,7 +920,7 @@ class ZI_Ops:
         log_frame = ttk.LabelFrame(self.tab_rcon, text=" Консоль RCON ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
-        self.rcon_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
+        self.rcon_log = tk.Text(log_frame, wrap="word", state="disabled", bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat", bd=2)
         self.rcon_log.grid(row=0, column=0, sticky="nsew")
         ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.rcon_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
@@ -1021,7 +945,7 @@ class ZI_Ops:
         btn_chk = ttk.Button(installed_frame, text="🔍 Проверить версии", style="Accent.TButton", command=self.check_plugins_versions)
         btn_chk.grid(row=0, column=2, sticky="w", padx=4, pady=4)
         Tooltip(btn_chk, "Скачивает .cs файлы с сервера, парсит версию из [Info(...)] и сравнивает с данными из списка обновлений")
-        ttk.Label(installed_frame, text="(скачивает .cs файлы во временную папку, парсит версию, удаляет)", foreground=_theme_color("#89dceb")).grid(row=0, column=3, sticky="w", padx=4, pady=4)
+        ttk.Label(installed_frame, text="(скачивает .cs файлы во временную папку, парсит версию, удаляет)", foreground="#89dceb").grid(row=0, column=3, sticky="w", padx=4, pady=4)
 
         # Плагины, отмеченные как кастомные, никогда не обновляются кнопкой «Обновить все».
         # Храним сразу нормализованные имена (без .cs), чтобы отметка переживала повторное сканирование.
@@ -1051,22 +975,22 @@ class ZI_Ops:
         update_frame = ttk.LabelFrame(self.tab_plugins, text=" 🔄 Автообновление плагинов по URL ", padding=10)
         update_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(update_frame, "Список плагинов для автоматического обновления. Программа скачает → загрузит на сервер → удалит с ПК")
-        ttk.Label(update_frame, text="Добавь ссылки. Программа скачает → загрузит на сервер → удалит с ПК.", foreground=_theme_color("#89dceb")).pack(anchor="w")
+        ttk.Label(update_frame, text="Добавь ссылки. Программа скачает → загрузит на сервер → удалит с ПК.", foreground="#89dceb").pack(anchor="w")
 
         # Header labels for columns
         hdr = ttk.Frame(update_frame)
         hdr.pack(fill="x", padx=2, pady=(2, 0))
-        ttk.Label(hdr, text="Название", width=16, font=("Segoe UI", 8, "bold"), foreground=_theme_color("#89b4fa")).pack(side="left", padx=2)
-        ttk.Label(hdr, text="URL скачивания (.cs)", width=30, font=("Segoe UI", 8, "bold"), foreground=_theme_color("#89b4fa")).pack(side="left", padx=2, fill="x", expand=True)
-        ttk.Label(hdr, text="Страница версии", width=24, font=("Segoe UI", 8, "bold"), foreground=_theme_color("#89b4fa")).pack(side="left", padx=2)
-        ttk.Label(hdr, text="Путь на сервере", width=20, font=("Segoe UI", 8, "bold"), foreground=_theme_color("#89b4fa")).pack(side="left", padx=2)
+        ttk.Label(hdr, text="Название", width=16, font=("Segoe UI", 8, "bold"), foreground="#89b4fa").pack(side="left", padx=2)
+        ttk.Label(hdr, text="URL скачивания (.cs)", width=30, font=("Segoe UI", 8, "bold"), foreground="#89b4fa").pack(side="left", padx=2, fill="x", expand=True)
+        ttk.Label(hdr, text="Страница версии", width=24, font=("Segoe UI", 8, "bold"), foreground="#89b4fa").pack(side="left", padx=2)
+        ttk.Label(hdr, text="Путь на сервере", width=20, font=("Segoe UI", 8, "bold"), foreground="#89b4fa").pack(side="left", padx=2)
         ttk.Label(hdr, text="", width=4).pack(side="left", padx=2)
 
         url_frame = ttk.Frame(update_frame)
         url_frame.pack(fill="both", expand=True, pady=5)
         url_frame.rowconfigure(0, weight=1); url_frame.columnconfigure(0, weight=1)
 
-        self.plugins_canvas = tk.Canvas(url_frame, bg=_theme_color("#1e1e2e"), highlightthickness=0, height=150)
+        self.plugins_canvas = tk.Canvas(url_frame, bg="#1e1e2e", highlightthickness=0, height=150)
         self.plugins_canvas.grid(row=0, column=0, sticky="nsew")
         vsb = ttk.Scrollbar(url_frame, orient="vertical", command=self.plugins_canvas.yview)
         vsb.grid(row=0, column=1, sticky="ns")
@@ -1096,7 +1020,7 @@ class ZI_Ops:
         log_frame = ttk.LabelFrame(self.tab_plugins, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
-        self.plugins_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
+        self.plugins_log = tk.Text(log_frame, wrap="word", state="disabled", bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat", bd=2)
         self.plugins_log.grid(row=0, column=0, sticky="nsew")
         ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.plugins_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
@@ -1123,9 +1047,9 @@ class ZI_Ops:
                     try:
                         if child.cget("textvariable") == str(row["url"]):
                             if ok:
-                                child.configure(foreground=_theme_color("#cdd6f4"))
+                                child.configure(foreground="#cdd6f4")
                             else:
-                                child.configure(foreground=_theme_color("#f38ba8"))
+                                child.configure(foreground="#f38ba8")
                     except Exception:
                         pass
             if ok:
@@ -1268,14 +1192,14 @@ class ZI_Ops:
         dlg = tk.Toplevel(self.root)
         dlg.title(f"Добавить плагин: {name}")
         dlg.geometry("550x320")
-        dlg.configure(bg=_theme_color("#1e1e2e"))
+        dlg.configure(bg="#1e1e2e")
         dlg.transient(self.root)
         dlg.grab_set()
         dlg.resizable(False, False)
 
         ttk.Label(dlg, text=f"Плагин '{name}' ({filename}) не найден в списке автообновления.",
                   font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=12, pady=(12, 4))
-        ttk.Label(dlg, text="Заполни данные для автоматического обновления:", foreground=_theme_color("#89dceb")).pack(anchor="w", padx=12, pady=(0, 8))
+        ttk.Label(dlg, text="Заполни данные для автоматического обновления:", foreground="#89dceb").pack(anchor="w", padx=12, pady=(0, 8))
 
         # URL
         f1 = ttk.Frame(dlg); f1.pack(fill="x", padx=12, pady=4)
@@ -1287,16 +1211,16 @@ class ZI_Ops:
 
         # Test URL button
         f1b = ttk.Frame(dlg); f1b.pack(fill="x", padx=12, pady=(0, 4))
-        lbl_test = ttk.Label(f1b, text="", foreground=_theme_color("#a6e3a1"))
+        lbl_test = ttk.Label(f1b, text="", foreground="#a6e3a1")
         lbl_test.pack(side="left", padx=(180, 0))
         def test_url():
-            lbl_test.config(text="⏳ Проверка...", foreground=_theme_color("#89dceb"))
+            lbl_test.config(text="⏳ Проверка...", foreground="#89dceb")
             dlg.update()
             ok, msg = self._validate_plugin_url(url_var.get().strip())
             if ok:
-                lbl_test.config(text=f"✅ {msg}", foreground=_theme_color("#a6e3a1"))
+                lbl_test.config(text=f"✅ {msg}", foreground="#a6e3a1")
             else:
-                lbl_test.config(text=f"❌ {msg}", foreground=_theme_color("#f38ba8"))
+                lbl_test.config(text=f"❌ {msg}", foreground="#f38ba8")
         ttk.Button(f1b, text="🧪 Проверить URL", command=test_url).pack(side="right")
 
         # Page
@@ -1350,9 +1274,9 @@ class ZI_Ops:
                 for child in row["frame"].winfo_children():
                     if isinstance(child, ttk.Entry) and child.cget("textvariable") == str(row["url"]):
                         if not ok:
-                            child.configure(foreground=_theme_color("#f38ba8"))
+                            child.configure(foreground="#f38ba8")
                         else:
-                            child.configure(foreground=_theme_color("#cdd6f4"))
+                            child.configure(foreground="#cdd6f4")
                         break
 
     def _check_plugins_worker(self, base, remote_folder, rows, ftp_cfg):
@@ -1556,9 +1480,9 @@ class ZI_Ops:
         item = self.installed_tree.insert("", "end", values=(filename, name, author, version, latest, custom_mark, status))
         self._installed_item_keys[item] = keys
         self.installed_tree.item(item, tags=(tag,))
-        self.installed_tree.tag_configure("green", foreground=_theme_color("#a6e3a1"))
-        self.installed_tree.tag_configure("red", foreground=_theme_color("#f38ba8"))
-        self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
+        self.installed_tree.tag_configure("green", foreground="#a6e3a1")
+        self.installed_tree.tag_configure("red", foreground="#f38ba8")
+        self.installed_tree.tag_configure("yellow", foreground="#f9e2af")
         self._apply_installed_plugins_sort()
 
     def _fetch_latest_version(self, page_url, log_widget=None):
@@ -1891,11 +1815,6 @@ class ZI_Ops:
         self.plugins_progress["value"] = 100
 
     def build_settings_tab(self):
-        theme_frame = ttk.LabelFrame(self.tab_settings, text=" Оформление ", padding=10)
-        theme_frame.pack(fill="x", padx=10, pady=(10, 5))
-        self.theme_button = ttk.Button(theme_frame, text="Тема: тёмная", command=self.toggle_theme)
-        self.theme_button.pack(side="left")
-        ttk.Label(theme_frame, text="Нажми, чтобы переключить светлую и тёмную тему.").pack(side="left", padx=10)
         ftp_frame = ttk.LabelFrame(self.tab_settings, text=" FTP Настройки ", padding=10)
         ftp_frame.pack(fill="x", padx=10, pady=(10, 5))
         Tooltip(ftp_frame, "Настройки подключения к FTP-серверу хостинга. Данные берутся из панели управления хостингом.")
@@ -2093,8 +2012,8 @@ class ZI_Ops:
             top = tk.Toplevel(self.root)
             top.title("Предпросмотр server.cfg")
             top.geometry("600x400")
-            top.configure(bg=_theme_color("#1e1e2e"))
-            txt = tk.Text(top, wrap="word", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
+            top.configure(bg="#1e1e2e")
+            txt = tk.Text(top, wrap="word", bg="#181825", fg="#cdd6f4", font=("Consolas", 10), relief="flat", bd=2)
             txt.pack(fill="both", expand=True, padx=10, pady=10)
             txt.insert("1.0", content)
             txt.config(state="disabled")
@@ -2805,11 +2724,11 @@ class ZI_Ops:
         widget.config(state="disabled")
 
     def _config_log_tags(self, widget):
-        widget.tag_configure("red", foreground=_theme_color("#f38ba8"))
-        widget.tag_configure("green", foreground=_theme_color("#a6e3a1"))
-        widget.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
-        widget.tag_configure("cyan", foreground=_theme_color("#89dceb"))
-        widget.tag_configure("white", foreground=_theme_color("#cdd6f4"))
+        widget.tag_configure("red", foreground="#f38ba8")
+        widget.tag_configure("green", foreground="#a6e3a1")
+        widget.tag_configure("yellow", foreground="#f9e2af")
+        widget.tag_configure("cyan", foreground="#89dceb")
+        widget.tag_configure("white", foreground="#cdd6f4")
 
     def load_config(self, path, silent=False):
         if not path or not os.path.isfile(path):
@@ -2833,7 +2752,6 @@ class ZI_Ops:
             self.rcon_ssl_var.set(data.get("rcon_ssl", False))
             self.api_key_var.set(data.get("api_key", ""))
             self.ftps_var.set(data.get("ftps", False))
-            self.apply_theme(data.get("theme", "dark"))
             # Judgment
             self._load_judgment_entries(data)
             # Wipe
@@ -2879,7 +2797,6 @@ class ZI_Ops:
 
     def save_config(self, silent=False):
         data = {
-            "theme": self.theme_mode,
             "ftp_host": self.host_var.get(),
             "ftp_port": self.port_var.get(),
             "ftp_user": self.user_var.get(),
