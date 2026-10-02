@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.6.0.0
-#    nuitka-project: --product-version=1.6.0.0
+#    nuitka-project: --file-version=1.5.32.0
+#    nuitka-project: --product-version=1.5.32.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -38,14 +38,10 @@ import time
 import webbrowser
 import select
 import ctypes
-import struct
-import queue
-import bz2
-import zlib
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.6.0.0"
+APP_VERSION = "1.5.32.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -223,167 +219,6 @@ class RustMapsAPI:
             raise RuntimeError(f"Ошибка сети RustMaps: {e.reason}")
 
 
-class RustQuery:
-    """Read public A2S_INFO data using the Steam UDP query protocol."""
-
-    @staticmethod
-    def parse_info(packet):
-        if not packet.startswith(b"\xff\xff\xff\xffI"):
-            raise ValueError("Неизвестный формат ответа Query")
-        offset = 5
-
-        def take(size):
-            nonlocal offset
-            if offset + size > len(packet):
-                raise ValueError("Неполный ответ Query")
-            result = packet[offset:offset + size]
-            offset += size
-            return result
-
-        def string():
-            nonlocal offset
-            end = packet.find(b"\0", offset)
-            if end < 0:
-                raise ValueError("Неполная строка в ответе Query")
-            result = packet[offset:end].decode("utf-8", errors="replace")
-            offset = end + 1
-            return result
-
-        take(1)  # Protocol version.
-        result = {"name": string(), "map": string()}
-        string(); string()  # Folder and game description.
-        take(2)  # App ID.
-        result["players"], result["max_players"], result["bots"] = take(3)
-        take(4)  # Server type, platform, password and VAC flags.
-        result["version"] = string()
-        flags = take(1)[0] if offset < len(packet) else 0
-        if flags & 0x80:
-            take(2)
-        if flags & 0x10:
-            take(8)
-        if flags & 0x40:
-            take(2); string()
-        if flags & 0x20:
-            keywords = string()
-            # Rust reports full player counts here when byte fields overflow.
-            for tag, field in (("cp", "players"), ("mp", "max_players")):
-                match = re.search(r"(?:^|,)" + tag + r"(\d+)(?:,|$)", keywords)
-                if match:
-                    result[field] = int(match.group(1))
-        if flags & 0x01:
-            take(8)
-        return result
-
-    @staticmethod
-    def fetch(host, port, cancel, timeout=3):
-        started = time.monotonic()
-        deadline = started + timeout
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)
-        if cancel.is_set():
-            raise InterruptedError()
-        family, socktype, protocol, _, address = addresses[0]
-        request = b"\xff\xff\xff\xffTSource Engine Query\0"
-        with socket.socket(family, socktype, protocol) as sock:
-            sock.connect(address)
-            sock.send(request)
-            fragments = {}
-            split_id = None
-            challenges = 0
-            while True:
-                if cancel.is_set():
-                    raise InterruptedError()
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError("Query не отвечает")
-                sock.settimeout(min(remaining, 0.2))
-                try:
-                    packet = sock.recv(65535)
-                except socket.timeout:
-                    continue
-                if packet.startswith(b"\xfe\xff\xff\xff"):
-                    if len(packet) < 12:
-                        raise ValueError("Неполный пакет Query")
-                    packet_id, total, index = struct.unpack_from("<IBB", packet, 4)
-                    if not 1 <= total <= 64 or index >= total:
-                        raise ValueError("Некорректные части ответа Query")
-                    if split_id is None:
-                        split_id = (packet_id, total)
-                    if split_id != (packet_id, total):
-                        continue
-                    fragments[index] = packet[12:]
-                    if sum(map(len, fragments.values())) > 1048576:
-                        raise ValueError("Ответ Query слишком большой")
-                    if len(fragments) != total:
-                        continue
-                    packet = b"".join(fragments[i] for i in range(total))
-                    if packet_id & 0x80000000:
-                        if len(packet) < 8:
-                            raise ValueError("Неполный сжатый ответ Query")
-                        size, checksum = struct.unpack_from("<II", packet)
-                        if size > 1048576:
-                            raise ValueError("Ответ Query слишком большой")
-                        decoder = bz2.BZ2Decompressor()
-                        packet = decoder.decompress(packet[8:], max_length=1048577)
-                        if not decoder.eof or len(packet) != size or zlib.crc32(packet) != checksum:
-                            raise ValueError("Повреждённый ответ Query")
-                    if not packet.startswith(b"\xff\xff\xff\xff"):
-                        packet = b"\xff\xff\xff\xff" + packet
-                if packet.startswith(b"\xff\xff\xff\xffA"):
-                    if len(packet) != 9 or challenges >= 2:
-                        raise ValueError("Некорректный запрос подтверждения Query")
-                    challenges += 1
-                    fragments.clear(); split_id = None
-                    sock.send(request + packet[5:9])
-                    continue
-                result = RustQuery.parse_info(packet)
-                result["ping"] = round((time.monotonic() - started) * 1000)
-                return result
-
-
-RCON_COMMANDS = (
-    ("status", "Статус сервера и список игроков"),
-    ("server.seed", "Seed текущей карты"),
-    ("server.worldsize", "Размер карты"),
-    ("server.save", "Сохранить мир"),
-    ("server.hostname", "Название сервера"),
-    ("server.description", "Описание сервера"),
-    ("server.maxplayers", "Лимит игроков"),
-    ("server.level", "Тип карты"),
-    ("server.tags", "Теги сервера"),
-    ("server.port", "Игровой порт"),
-    ("server.queryport", "Порт Query"),
-    ("server.identity", "Имя папки сервера"),
-    ("server.fps", "Ограничение FPS сервера"),
-    ("server.tickrate", "Частота обновления сервера"),
-    ("server.saveinterval", "Интервал автосохранения"),
-    ("say", 'Объявление: say "текст"'),
-    ("restart", 'Перезапуск: restart 60 "причина"'),
-    ("quit", "Сохранить и остановить сервер"),
-    ("find", "Поиск команд на сервере: find seed"),
-    ("kick", 'Исключить игрока: kick SteamID "причина"'),
-    ("ban", 'Заблокировать игрока: ban SteamID "причина"'),
-    ("unban", "Снять блокировку: unban SteamID"),
-    ("banlist", "Список заблокированных игроков"),
-    ("users", "Список подключённых игроков"),
-    ("ownerid", 'Назначить владельца: ownerid SteamID "имя"'),
-    ("moderatorid", 'Назначить модератора: moderatorid SteamID "имя"'),
-    ("removeowner", "Снять права владельца: removeowner SteamID"),
-    ("removemoderator", "Снять права модератора: removemoderator SteamID"),
-    ("writecfg", "Сохранить настройки сервера"),
-    ("env.time", "Время суток на сервере"),
-)
-
-
-def rcon_command_matches(text):
-    token = text.strip().lower()
-    if not token or any(character.isspace() for character in text.lstrip()):
-        return []
-    matches = [(command, description) for command, description in RCON_COMMANDS if token in command]
-    return sorted(matches, key=lambda item: (
-        0 if item[0].startswith(token) else 1 if item[0].split(".")[-1].startswith(token) else 2,
-        next(i for i, command in enumerate(RCON_COMMANDS) if command[0] == item[0])))[:8]
-
-
 class RustRCON:
     def __init__(self, host, port, password, timeout=10, path="", ssl=False):
         self.host = host
@@ -546,14 +381,6 @@ class ZI_Ops:
         self._rcon_connecting = False
         self.rcon_lock = threading.Lock()
         self.rcon_client = None
-        self._closing = False
-        self._query_results = queue.Queue()
-        self._query_busy = False
-        self._query_epoch = 0
-        self._query_after = None
-        self._query_cancel = threading.Event()
-        self._query_active = False
-        self._query_pending = False
         if "__compiled__" in globals():
             # Nuitka onefile: конфиг хранится у исходного EXE, не во временной папке.
             self.script_dir = os.path.abspath(__compiled__.containing_dir)
@@ -565,8 +392,6 @@ class ZI_Ops:
         self._set_icon()
         self.build_ui()
         self.load_config(self.auto_config_path, silent=True)
-        self.notebook.bind("<<NotebookTabChanged>>", self._query_tab_changed, add="+")
-        self._query_poll_after = self.root.after(100, self._query_poll)
         if not WEBSOCKET_OK:
             self.root.after(1000, lambda: messagebox.showwarning("RCON недоступен",
                 "Библиотека websocket-client не установлена.\nRCON-функции недоступны.\n\nУстанови: pip install websocket-client"))
@@ -1160,30 +985,9 @@ class ZI_Ops:
         self.rcon_cmd_var = tk.StringVar()
         entry = ttk.Entry(manual_frame, textvariable=self.rcon_cmd_var)
         entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        self.rcon_cmd_entry = entry
-        self._suggest_suppressed = False
-        self._suggest_frame = ttk.Frame(self.tab_rcon, padding=2, relief="solid", borderwidth=1)
-        self._suggest_tree = ttk.Treeview(self._suggest_frame, columns=("command", "description"),
-                                         show="headings", height=6, selectmode="browse")
-        self._suggest_tree.heading("command", text="Команда — Tab для выбора")
-        self._suggest_tree.heading("description", text="Описание / пример")
-        self._suggest_tree.column("command", width=190, stretch=False)
-        self._suggest_tree.column("description", width=380)
-        self._suggest_tree.pack(fill="both", expand=True)
-        self.rcon_cmd_var.trace_add("write", self._rcon_update_suggestions)
-        entry.bind("<Return>", self._rcon_manual_send)
-        entry.bind("<Tab>", self._rcon_accept_suggestion)
-        entry.bind("<Escape>", self._rcon_hide_suggestions)
-        entry.bind("<Down>", lambda event: self._rcon_move_suggestion(1))
-        entry.bind("<Up>", lambda event: self._rcon_move_suggestion(-1))
-        entry.bind("<FocusIn>", self._rcon_update_suggestions)
-        entry.bind("<FocusOut>", lambda event: self.root.after(100, self._rcon_suggestion_focus_out))
-        self._suggest_tree.bind("<ButtonRelease-1>", self._rcon_accept_suggestion)
-        self._suggest_tree.bind("<Tab>", self._rcon_accept_suggestion)
-        self._suggest_tree.bind("<Return>", self._rcon_accept_suggestion)
-        self._suggest_tree.bind("<Escape>", self._rcon_hide_suggestions)
+        entry.bind("<Return>", lambda e: self.rcon_send_command(self.rcon_cmd_var.get()))
         ttk.Button(manual_frame, text="Отправить", style="Accent.TButton",
-                   command=self._rcon_manual_send).grid(row=0, column=1)
+                   command=lambda: self.rcon_send_command(self.rcon_cmd_var.get())).grid(row=0, column=1)
 
         seedr_frame = ttk.LabelFrame(self.tab_rcon, text=" Быстрый вайп через RCON ", padding=10)
         seedr_frame.pack(fill="x", padx=10, pady=5)
@@ -1227,184 +1031,16 @@ class ZI_Ops:
         Tooltip(btn_rw, "Меняет seed/worldsize и отправляет save + restart. RCON сам по себе не удаляет файлы мира, поэтому это НЕ FTP-вайп.")
         seedr_frame.columnconfigure(4, weight=1)
 
-        console_area = ttk.Panedwindow(self.tab_rcon, orient="horizontal")
-        console_area.pack(fill="both", expand=True, padx=10, pady=(5, 10))
-        log_frame = ttk.LabelFrame(console_area, text=" Консоль RCON ", padding=6)
-        console_area.add(log_frame, weight=2)
+        log_frame = ttk.LabelFrame(self.tab_rcon, text=" Консоль RCON ", padding=6)
+        log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
-        self.rcon_log = tk.Text(log_frame, width=55, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
+        self.rcon_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
         self.rcon_log.grid(row=0, column=0, sticky="nsew")
         ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.rcon_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
         self.rcon_log.config(yscrollcommand=ls.set)
         self._config_log_tags(self.rcon_log)
-        query_frame = ttk.LabelFrame(console_area, text=" Query — статус сервера ", padding=12, width=290)
-        console_area.add(query_frame, weight=1)
-        query_frame.columnconfigure(1, weight=1)
-        self.query_status_var = tk.StringVar(value="Укажите Query-порт в настройках")
-        ttk.Label(query_frame, textvariable=self.query_status_var, wraplength=255,
-                  font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 14))
-        self.query_values = {}
-        for index, (key, label) in enumerate((("name", "Название"), ("map", "Карта"),
-                ("players", "Игроки"), ("ping", "Время ответа"), ("version", "Версия сервера"),
-                ("updated", "Последний ответ")), 1):
-            ttk.Label(query_frame, text=label).grid(row=index, column=0, sticky="nw", padx=(0, 8), pady=(0, 12))
-            var = tk.StringVar(value="—")
-            self.query_values[key] = var
-            ttk.Label(query_frame, textvariable=var, wraplength=170,
-                      font=("Segoe UI", 10, "bold")).grid(row=index, column=1, sticky="new", pady=(0, 12))
-        ttk.Label(query_frame, text="Обновление каждые 10 секунд,\nпока открыта вкладка RCON.",
-                  wraplength=255).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(6, 0))
-        self._query_last_endpoint = None
         self.rcon_client = None
-
-    def _rcon_hide_suggestions(self, event=None):
-        self._suggest_frame.place_forget()
-        return "break" if event is not None else None
-
-    def _rcon_update_suggestions(self, *args):
-        if self._suggest_suppressed:
-            return
-        matches = rcon_command_matches(self.rcon_cmd_var.get())
-        self._suggest_tree.delete(*self._suggest_tree.get_children())
-        if not matches or self.root.focus_get() != self.rcon_cmd_entry:
-            self._rcon_hide_suggestions()
-            return
-        for command, description in matches:
-            self._suggest_tree.insert("", "end", values=(command, description))
-        self._suggest_tree.configure(height=min(6, len(matches)))
-        self._suggest_frame.place(in_=self.rcon_cmd_entry, x=0,
-            y=self.rcon_cmd_entry.winfo_height() + 3, width=self.rcon_cmd_entry.winfo_width())
-        self._suggest_frame.lift()
-        self._suggest_tree.selection_set(self._suggest_tree.get_children()[0])
-
-    def _rcon_move_suggestion(self, direction):
-        if not self._suggest_frame.winfo_ismapped():
-            self._rcon_update_suggestions()
-            return "break"
-        items = self._suggest_tree.get_children()
-        if items:
-            selected = self._suggest_tree.selection()
-            index = items.index(selected[0]) if selected else 0
-            item = items[(index + direction) % len(items)]
-            self._suggest_tree.selection_set(item)
-            self._suggest_tree.see(item)
-        return "break"
-
-    def _rcon_accept_suggestion(self, event=None):
-        selected = self._suggest_tree.selection()
-        if not self._suggest_frame.winfo_ismapped() or not selected:
-            return None
-        command = self._suggest_tree.item(selected[0], "values")[0]
-        self._suggest_suppressed = True
-        try:
-            self.rcon_cmd_entry.focus_set()
-            self.rcon_cmd_var.set(command)
-            self.rcon_cmd_entry.icursor("end")
-        finally:
-            self._suggest_suppressed = False
-        self._rcon_hide_suggestions()
-        return "break"
-
-    def _rcon_suggestion_focus_out(self):
-        if not self._closing and self.root.focus_get() not in (self.rcon_cmd_entry, self._suggest_tree):
-            self._rcon_hide_suggestions()
-
-    def _rcon_manual_send(self, event=None):
-        self._rcon_hide_suggestions()
-        self.rcon_send_command(self.rcon_cmd_var.get())
-        return "break"
-
-    def _query_tab_changed(self, event=None):
-        active = self.notebook.select() == str(self.tab_rcon)
-        if active == self._query_active:
-            return
-        self._query_active = active
-        self._query_epoch += 1
-        self._query_cancel.set()
-        self._query_pending = active
-        if self._query_after is not None:
-            self.root.after_cancel(self._query_after)
-            self._query_after = None
-        if active:
-            self._query_refresh()
-        else:
-            self._rcon_hide_suggestions()
-
-    def _query_refresh(self):
-        self._query_after = None
-        if self._closing or not self._query_active:
-            return
-        if self._query_busy:
-            self._query_pending = True
-            return
-        self._query_pending = False
-        host = self.query_host_var.get().strip() or self.rcon_host_var.get().strip()
-        port_text = self.query_port_var.get().strip()
-        endpoint = (host, port_text)
-        if endpoint != self._query_last_endpoint:
-            for value in self.query_values.values():
-                value.set("—")
-            self._query_last_endpoint = endpoint
-        try:
-            port = int(port_text)
-            if not host or not 1 <= port <= 65535:
-                raise ValueError()
-        except ValueError:
-            self.query_status_var.set("Укажите адрес и Query-порт (1–65535) в настройках")
-            self._query_after = self.root.after(10000, self._query_refresh)
-            return
-        self.query_status_var.set("Запрос Query…")
-        self._query_busy = True
-        self._query_cancel = threading.Event()
-        cancel, epoch = self._query_cancel, self._query_epoch
-
-        def worker():
-            try:
-                result, error = RustQuery.fetch(host, port, cancel), None
-            except InterruptedError:
-                result, error = None, "cancelled"
-            except (TimeoutError, socket.timeout):
-                result, error = None, "Query не отвечает"
-            except (OSError, ValueError) as exc:
-                result, error = None, "Query не отвечает: " + str(exc)
-            except Exception:
-                result, error = None, "Не удалось прочитать ответ Query"
-            self._query_results.put((epoch, endpoint, result, error))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _query_poll(self):
-        if self._closing:
-            return
-        try:
-            epoch, endpoint, result, error = self._query_results.get_nowait()
-        except queue.Empty:
-            pass
-        else:
-            self._query_busy = False
-            current = (self.query_host_var.get().strip() or self.rcon_host_var.get().strip(),
-                       self.query_port_var.get().strip())
-            if self._query_active:
-                if epoch == self._query_epoch and endpoint == current and error != "cancelled":
-                    if result is not None:
-                        self.query_status_var.set("Сервер отвечает")
-                        for key in ("name", "map", "version"):
-                            self.query_values[key].set(result[key])
-                        self.query_values["players"].set(f'{result["players"]} / {result["max_players"]}')
-                        self.query_values["ping"].set(f'{result["ping"]} мс')
-                        self.query_values["updated"].set(time.strftime("%H:%M:%S"))
-                    else:
-                        suffix = "\nПоказаны последние полученные данные." if self.query_values["updated"].get() != "—" else ""
-                        self.query_status_var.set(error + suffix)
-                    self._query_after = self.root.after(10000, self._query_refresh)
-                else:
-                    self._query_pending = True
-                if self._query_pending:
-                    if self._query_after is not None:
-                        self.root.after_cancel(self._query_after)
-                    self._query_refresh()
-        self._query_poll_after = self.root.after(100, self._query_poll)
 
     # ===== ПЛАГИНЫ =====
     def build_plugins_tab(self):
@@ -2399,25 +2035,12 @@ class ZI_Ops:
         self.plugins_progress["value"] = 100
 
     def build_settings_tab(self):
-        settings_area = ttk.Frame(self.tab_settings)
-        settings_area.pack(fill="both", expand=True)
-        self.settings_canvas = tk.Canvas(settings_area, highlightthickness=0, bg=_theme_color("#1e1e2e"))
-        settings_scroll = ttk.Scrollbar(settings_area, orient="vertical", command=self.settings_canvas.yview)
-        settings_scroll.pack(side="right", fill="y")
-        self.settings_canvas.pack(side="left", fill="both", expand=True)
-        self.settings_canvas.configure(yscrollcommand=settings_scroll.set)
-        self.settings_content = ttk.Frame(self.settings_canvas)
-        settings_window = self.settings_canvas.create_window((0, 0), window=self.settings_content, anchor="nw")
-        self.settings_content.bind("<Configure>", lambda event:
-            self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox("all")))
-        self.settings_canvas.bind("<Configure>", lambda event:
-            self.settings_canvas.itemconfigure(settings_window, width=event.width))
-        theme_frame = ttk.LabelFrame(self.settings_content, text=" Оформление ", padding=10)
+        theme_frame = ttk.LabelFrame(self.tab_settings, text=" Оформление ", padding=10)
         theme_frame.pack(fill="x", padx=10, pady=(10, 5))
         self.theme_button = ttk.Button(theme_frame, text="Тема: тёмная", command=self.toggle_theme)
         self.theme_button.pack(side="left")
         ttk.Label(theme_frame, text="Нажми, чтобы переключить светлую и тёмную тему.").pack(side="left", padx=10)
-        ftp_frame = ttk.LabelFrame(self.settings_content, text=" FTP Настройки ", padding=10)
+        ftp_frame = ttk.LabelFrame(self.tab_settings, text=" FTP Настройки ", padding=10)
         ftp_frame.pack(fill="x", padx=10, pady=(10, 5))
         Tooltip(ftp_frame, "Настройки подключения к FTP-серверу хостинга. Данные берутся из панели управления хостингом.")
         self.host_var = tk.StringVar()
@@ -2458,7 +2081,7 @@ class ZI_Ops:
         self.ftp_test_button = ttk.Button(ftp_frame, text="Проверить FTP и базовую папку", command=self.test_ftp_settings)
         self.ftp_test_button.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
-        rcon_frame = ttk.LabelFrame(self.settings_content, text=" RCON Настройки ", padding=10)
+        rcon_frame = ttk.LabelFrame(self.tab_settings, text=" RCON Настройки ", padding=10)
         rcon_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(rcon_frame, "Настройки удалённого управления сервером через RCON. RCON-порт отличается от игрового!")
         self.rcon_host_var = tk.StringVar()
@@ -2496,23 +2119,7 @@ class ZI_Ops:
         Tooltip(cb_ssl, "Включи, если хостинг требует WSS (WebSocket Secure) вместо обычного WS. Попробуй сначала без галочки.")
         rcon_frame.columnconfigure(1, weight=1)
 
-        query_settings = ttk.LabelFrame(self.settings_content, text=" Query — публичный статус сервера ", padding=10)
-        query_settings.pack(fill="x", padx=10, pady=5)
-        self.query_host_var = tk.StringVar()
-        self.query_port_var = tk.StringVar()
-        ttk.Label(query_settings, text="Адрес:").grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        query_host_entry = ttk.Entry(query_settings, textvariable=self.query_host_var, width=40)
-        query_host_entry.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
-        Tooltip(query_host_entry, "Если оставить пустым, используется адрес RCON. Пароль для Query не нужен.")
-        ttk.Label(query_settings, text="Query-порт:").grid(row=1, column=0, sticky="w", padx=4, pady=4)
-        query_port_entry = ttk.Entry(query_settings, textvariable=self.query_port_var, width=40)
-        query_port_entry.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
-        Tooltip(query_port_entry, "UDP-порт server.queryport из панели хостинга. Может отличаться от игрового порта и RCON.")
-        ttk.Label(query_settings, text="Обновление во вкладке RCON каждые 10 секунд. Укажите порт из панели хостинга.",
-                  wraplength=650).grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
-        query_settings.columnconfigure(1, weight=1)
-
-        api_frame = ttk.LabelFrame(self.settings_content, text=" RustMaps API ", padding=10)
+        api_frame = ttk.LabelFrame(self.tab_settings, text=" RustMaps API ", padding=10)
         api_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(api_frame, "API ключ для rustmaps.com — позволяет генерировать seed через их сервис прямо из программы")
         self.api_key_var = tk.StringVar()
@@ -2531,7 +2138,7 @@ class ZI_Ops:
         Tooltip(btn_api, "Показать/скрыть API ключ")
         api_frame.columnconfigure(1, weight=1)
 
-        btn_frame = ttk.Frame(self.settings_content)
+        btn_frame = ttk.Frame(self.tab_settings)
         btn_frame.pack(fill="x", padx=10, pady=5)
         btn_save = ttk.Button(btn_frame, text="💾 Сохранить настройки", command=self.save_config)
         btn_save.pack(side="left", padx=4)
@@ -2539,14 +2146,6 @@ class ZI_Ops:
         btn_load = ttk.Button(btn_frame, text="📂 Загрузить настройки", command=lambda: self.load_config(filedialog.askopenfilename(filetypes=[("JSON", "*.json")])))
         btn_load.pack(side="left", padx=4)
         Tooltip(btn_load, "Загружает настройки из JSON-файла. Можно иметь несколько конфигов для разных серверов.")
-        def settings_wheel(event):
-            self.settings_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
-            return "break"
-        def bind_settings_wheel(widget):
-            widget.bind("<MouseWheel>", settings_wheel, add="+")
-            for child in widget.winfo_children():
-                bind_settings_wheel(child)
-        bind_settings_wheel(settings_area)
 
     def toggle_seed_field(self):
         if self.wipe_random_seed_var.get():
@@ -3509,8 +3108,6 @@ class ZI_Ops:
             self.rcon_pass_var.set(data.get("rcon_pass", ""))
             self.rcon_path_var.set(data.get("rcon_path", ""))
             self.rcon_ssl_var.set(data.get("rcon_ssl", False))
-            self.query_host_var.set(data.get("query_host", ""))
-            self.query_port_var.set(data.get("query_port", ""))
             self.api_key_var.set(data.get("api_key", ""))
             self.ftps_var.set(data.get("ftps", False))
             self.apply_theme(data.get("theme", "dark"))
@@ -3570,8 +3167,6 @@ class ZI_Ops:
             "rcon_pass": self.rcon_pass_var.get(),
             "rcon_path": self.rcon_path_var.get(),
             "rcon_ssl": self.rcon_ssl_var.get(),
-            "query_host": self.query_host_var.get(),
-            "query_port": self.query_port_var.get(),
             "api_key": self.api_key_var.get(),
             "ftps": self.ftps_var.get(),
             "custom_plugins": sorted(self.custom_plugins),
@@ -3613,11 +3208,6 @@ class ZI_Ops:
                 messagebox.showerror("Ошибка", str(e))
 
     def on_close(self):
-        self._closing = True
-        self._query_cancel.set()
-        for timer in (self._query_after, self._query_poll_after):
-            if timer is not None:
-                self.root.after_cancel(timer)
         self.stop_event.set()
         self.save_config(silent=True)
         if self.rcon_client:
