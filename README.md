@@ -62,6 +62,6 @@ build.bat
 
 Автор: **danilmine_D47**.
 
-[DanStudios47 — новости и обновления](https://t.me/DanStudios47) · [DonationAlerts](https://www.donationalerts.com/r/danilmine_)
+[новости и обновления](https://t.me/DanStudios47) · [DonationAlerts](https://www.donationalerts.com/r/danilmine_)
 
 Программа бесплатная. Если она помогает в работе с сервером, можно поддержать разработку через DonationAlerts. Это помогает продолжать работу над программой и выпускать обновления.
