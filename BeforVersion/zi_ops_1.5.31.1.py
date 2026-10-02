@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.5.32.0
-#    nuitka-project: --product-version=1.5.32.0
+#    nuitka-project: --file-version=1.5.31.1
+#    nuitka-project: --product-version=1.5.31.1
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -41,7 +41,7 @@ import ctypes
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.5.32.0"
+APP_VERSION = "1.5.31.1"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -252,76 +252,38 @@ class RustRCON:
                 pass
         self.connected = False
 
-    def send(self, command, wait=False, timeout=10):
+    def send(self, command, wait=False, timeout=5):
         with self._lock:
             if not self.connected or not self.ws:
                 raise RuntimeError("Нет подключения")
             self._msg_id += 1
-            request_id = self._msg_id
-            payload = {"Identifier": request_id, "Message": command, "Name": "RustManager"}
+            payload = {"Identifier": self._msg_id, "Message": command, "Name": "RustManager"}
             self.ws.settimeout(self.timeout)
             self.ws.send(json.dumps(payload))
             if not wait:
                 return "Команда отправлена"
             deadline = time.monotonic() + max(0.1, timeout)
-            frames = 0
-
-            def no_reply():
-                if frames == 0:
-                    return "[Таймаут: WebSocket не вернул ни одного сообщения после отправки команды]"
-                return f"[Таймаут: получено сообщений {frames}, но нет ответа с ID {request_id}]"
-
-            def packets(value):
-                if isinstance(value, list):
-                    for entry in value:
-                        yield from packets(entry)
-                elif isinstance(value, dict):
-                    lowered = {str(key).lower(): val for key, val in value.items()}
-                    if "identifier" in lowered:
-                        yield lowered
-                    for key in ("data", "payload", "response"):
-                        nested = lowered.get(key)
-                        if isinstance(nested, str):
-                            try: nested = json.loads(nested)
-                            except ValueError: continue
-                        if isinstance(nested, (dict, list)):
-                            yield from packets(nested)
-
             try:
                 while True:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        return no_reply()
+                        return "[Таймаут: сервер не ответил вовремя]"
                     self.ws.settimeout(remaining)
-                    response = self.ws.recv()
-                    if response is None or response == "" or response == b"":
-                        self.connected = False
-                        return "[WebSocket закрыт сервером без ответа]"
-                    frames += 1
-                    raw = response.decode("utf-8", errors="replace") if isinstance(response, bytes) else str(response)
+                    resp = self.ws.recv()
+                    if not resp:
+                        return "[Пустой ответ]"
                     try:
-                        data = json.loads(raw)
-                    except (ValueError, TypeError):
-                        # Plain text is shown unchanged; do not discard it or truncate it.
-                        return raw
-                    for packet in packets(data):
-                        try:
-                            identifier = int(packet.get("identifier"))
-                        except (ValueError, TypeError, OverflowError):
-                            continue
-                        if identifier == request_id:
-                            message = packet.get("message", packet.get("output", packet.get("result", "")))
-                            if isinstance(message, (dict, list)):
-                                return json.dumps(message, ensure_ascii=False)
-                            return str(message) if message is not None else ""
+                        data = json.loads(resp)
+                    except json.JSONDecodeError:
+                        return f"[Raw: {str(resp)[:200]}]"
+                    # Rust RCON can send messages unrelated to our request.
+                    if data.get("Identifier") == self._msg_id:
+                        return str(data.get("Message", ""))
             except websocket.WebSocketTimeoutException:
-                return no_reply()
-            except Exception as exc:
+                return "[Таймаут: сервер не ответил вовремя]"
+            except Exception as e:
                 self.connected = False
-                raise RuntimeError(f"RCON соединение потеряно: {exc}")
-            finally:
-                try: self.ws.settimeout(self.timeout)
-                except Exception: pass
+                raise RuntimeError(f"RCON соединение потеряно: {e}")
 
 
 class ZI_Ops:
@@ -1190,7 +1152,7 @@ class ZI_Ops:
         # Page
         ent_p = ttk.Entry(frame, textvariable=pv, width=24)
         ent_p.pack(side="left", padx=2)
-        Tooltip(ent_p, "Страница для проверки актуальной версии. Страница конкретного плагина: uMod, Codefling, RustPlugin, Lone Design или GitHub releases")
+        Tooltip(ent_p, "Страница для проверки актуальной версии. Например: https://github.com/автор/репо/releases или https://umod.org/plugins/plugin-name")
         # Remote
         ent_r = ttk.Entry(frame, textvariable=rv, width=20)
         ent_r.pack(side="left", padx=2)
@@ -1430,8 +1392,8 @@ class ZI_Ops:
                     version = self._normalize_version(version)
                     base_name = os.path.splitext(filename)[0].lower()
 
-                    matched = next((r for r in rows if r["name"] in (base_name, self._plugin_key(name)) or r["remote"] == filename.lower()), None)
-                    if matched and matched["page"]:
+                    matched = next((r for r in rows if r["name"] == base_name or r["remote"] == filename.lower()), None)
+                    if matched and matched["page"] and version != "?":
                         page_key = matched["page"].strip()
                         if page_key not in latest_cache:
                             latest_cache[page_key] = self._fetch_latest_version(page_key, self.plugins_log)
@@ -1445,10 +1407,6 @@ class ZI_Ops:
                             elif cmp is not None and cmp < 0:
                                 status, status_tag = "ℹ️ На сервере новее", "yellow"
 
-                    if not matched or not matched["page"]:
-                        self.log(self.plugins_log, f"Нет страницы версии для {filename}. Добавь ссылку в «Страница версии» списка плагинов.", "yellow")
-                    if version == "?":
-                        self.log(self.plugins_log, f"Не удалось прочитать Info из {filename}; файл может быть обфусцирован или иметь другой формат.", "yellow")
                     self.root.after(0, lambda fn=filename,n=name,a=author,v=version,lv=latest_version,st=status,tg=status_tag:
                         self._insert_plugin_row(fn,n,a,v,lv,st,tg))
                     self.log(self.plugins_log, f"{status} {name} | Установлено: {version} | Последняя: {latest_version}",
@@ -1603,110 +1561,6 @@ class ZI_Ops:
         self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
         self._apply_installed_plugins_sort()
 
-    def _open_version_response(self, request, timeout=15):
-        """Retry transient errors, honoring Retry-After and cancellation."""
-        for attempt in range(1, 11):
-            if self.stop_event.is_set():
-                raise RuntimeError("Проверка остановлена")
-            host = urllib.parse.urlsplit(request.full_url).hostname or ""
-            if host == "umod.org" or host.endswith(".umod.org"):
-                delay = max(0, 1.0 - (time.monotonic() - getattr(self, "_umod_last_request", 0)))
-                if delay and self.stop_event.wait(delay):
-                    raise RuntimeError("Проверка остановлена")
-                self._umod_last_request = time.monotonic()
-            try:
-                return urllib.request.urlopen(request, timeout=timeout)
-            except urllib.error.HTTPError as exc:
-                if attempt == 10 or exc.code not in (408, 429, 500, 502, 503, 504):
-                    raise
-                delay = min(30, 2 ** min(attempt, 5))
-                retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
-                try:
-                    delay = max(delay, float(retry_after))
-                except ValueError:
-                    try:
-                        from email.utils import parsedate_to_datetime
-                        delay = max(delay, parsedate_to_datetime(retry_after).timestamp() - time.time())
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-                exc.close()
-            except (urllib.error.URLError, TimeoutError, OSError):
-                if attempt == 10:
-                    raise
-                delay = min(30, 2 ** min(attempt, 5))
-            self.log(self.plugins_log, f"Повтор запроса версии {host}: попытка {attempt + 1}/10 через {int(delay)} сек.", "yellow")
-            if self.stop_event.wait(delay):
-                raise RuntimeError("Проверка остановлена")
-
-    @staticmethod
-    def _extract_html_version(source, page_url=""):
-        from html import unescape
-
-        def valid(value):
-            text = str(value or "").strip()
-            match = re.fullmatch(r"[vV]?(\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?)", text)
-            return match.group(1) if match else None
-
-        def same_page(url):
-            if not page_url or not isinstance(url, str):
-                return True
-            current = urllib.parse.urlsplit(page_url)
-            candidate = urllib.parse.urlsplit(urllib.parse.urljoin(page_url, url))
-            return (current.hostname, current.path.rstrip("/")) == (candidate.hostname, candidate.path.rstrip("/"))
-
-        def structured(value):
-            if isinstance(value, list):
-                for item in value:
-                    result = structured(item)
-                    if result:
-                        return result
-            elif isinstance(value, dict):
-                kind = value.get("@type", "")
-                kinds = kind if isinstance(kind, list) else [kind]
-                if any(k in ("SoftwareApplication", "WebApplication", "CreativeWork", "Product") for k in kinds):
-                    if same_page(value.get("url")):
-                        result = valid(value.get("softwareVersion")) or valid(value.get("version"))
-                        if result:
-                            return result
-                return structured(value.get("@graph"))
-            return None
-
-        # Codefling exposes softwareVersion; XenForo marketplaces expose CreativeWork.version.
-        for script in re.findall(r'<script\b[^>]*\btype\s*=\s*[\"\']application/ld\+json[\"\'][^>]*>(.*?)</script>', source, re.I | re.S):
-            try:
-                data = json.loads(script.strip())
-            except ValueError:
-                continue
-            result = structured(data)
-            if result:
-                return result
-        patterns = (
-            r'<[^>]*\bitemprop\s*=\s*[\"\']softwareVersion[\"\'][^>]*\bcontent\s*=\s*[\"\']([^\"\']+)',
-            r'<[^>]*\bitemprop\s*=\s*[\"\']softwareVersion[\"\'][^>]*>\s*([^<]+)',
-            r'\bdata-version\s*=\s*[\"\']([^\"\']+)',
-            r'<[^>]*class\s*=\s*[\"\'][^\"\']*(?:resourceHeader-version|p-title-value-version|plugin-version)[^\"\']*[\"\'][^>]*>\s*([^<]+)',
-        )
-        for pattern in patterns:
-            for match in re.finditer(pattern, source, re.I):
-                result = valid(unescape(match.group(1)))
-                if result:
-                    return result
-        # Explicit version fields in a product information table; exclude scripts/comments and arbitrary v-numbers.
-        clean = re.sub(r'<(?:script|style)\b[^>]*>.*?</(?:script|style)>|<!--.*?-->', '', source, flags=re.I | re.S)
-        for match in re.finditer(r'<(?:tr|dl)\b[^>]*>(.*?)</(?:tr|dl)>', clean, re.I | re.S):
-            text = unescape(re.sub(r'<[^>]+>', ' ', match.group(1)))
-            match_version = re.search(r'(?:Plugin\s+Version|Current\s+Version|Version|Версия)\s*:?\s*[vV]?(\d+(?:\.\d+){1,3})\b', text, re.I)
-            if match_version:
-                return match_version.group(1)
-        # Current resource title, as used by marketplaces; never search plugin descriptions/reviews.
-        for heading in re.findall(r'<h1\b[^>]*>(.*?)</h1>', clean, re.I | re.S):
-            text = unescape(re.sub(r'<[^>]+>', ' ', heading)).strip()
-            match = re.search(r'\s+[vV]?(\d+(?:\.\d+){1,3})\s*$', text)
-            if match:
-                return match.group(1)
-        return "?"
-
-
     def _fetch_latest_version(self, page_url, log_widget=None):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1716,16 +1570,10 @@ class ZI_Ops:
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
         }
-        parts_url = urllib.parse.urlsplit(page_url)
-        host = (parts_url.hostname or "").lower()
-        if parts_url.scheme not in ("http", "https") or not host:
-            if log_widget:
-                self.log(log_widget, "Некорректная ссылка на страницу версии.", "yellow")
-            return "?"
         req = urllib.request.Request(page_url, headers=headers)
 
         # GitHub API
-        if host == "github.com" or host == "www.github.com":
+        if "github.com" in page_url:
             parts = page_url.replace("https://", "").replace("http://", "").split("/")
             if len(parts) >= 3:
                 owner, repo = parts[1], parts[2]
@@ -1735,7 +1583,7 @@ class ZI_Ops:
                     "Accept": "application/vnd.github.v3+json"
                 })
                 try:
-                    with self._open_version_response(api_req, timeout=15) as resp:
+                    with urllib.request.urlopen(api_req, timeout=15) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                         tag = data.get("tag_name", "")
                         return tag.lstrip("v").strip()
@@ -1747,7 +1595,7 @@ class ZI_Ops:
         # uMod: prefer the official latest.json endpoint.
         # It is much more reliable for version checking than scraping the main page,
         # and uMod documents this JSON-style plugin endpoint for update tooling.
-        if host in ("umod.org", "www.umod.org") and "/plugins/" in parts_url.path:
+        if "umod.org" in page_url and "/plugins/" in page_url:
             slug = page_url.split("/plugins/")[-1].split("/")[0].split("?")[0].strip()
             base_url = f"https://umod.org/plugins/{slug}"
 
@@ -1759,7 +1607,7 @@ class ZI_Ops:
                     "Accept": "application/json,text/plain,*/*",
                     "Referer": base_url,
                 })
-                with self._open_version_response(latest_req, timeout=15) as resp:
+                with urllib.request.urlopen(latest_req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8", errors="ignore"))
                     ver = data.get("version") or data.get("latest_release_version")
                     if ver:
@@ -1779,7 +1627,7 @@ class ZI_Ops:
                     "Accept": "application/json",
                     "Referer": base_url,
                 })
-                with self._open_version_response(api_req, timeout=15) as resp:
+                with urllib.request.urlopen(api_req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8", errors="ignore"))
                     ver = data.get("latest_release_version") or data.get("version") or data.get("latest_release", {}).get("version")
                     if ver:
@@ -1797,7 +1645,7 @@ class ZI_Ops:
             updates_url = f"{base_url}/updates"
             try:
                 updates_req = urllib.request.Request(updates_url, headers=headers)
-                with self._open_version_response(updates_req, timeout=15) as resp:
+                with urllib.request.urlopen(updates_req, timeout=15) as resp:
                     html = resp.read().decode("utf-8", errors="ignore")
 
                 # First release heading/version on uMod's updates page.
@@ -1820,7 +1668,7 @@ class ZI_Ops:
             # 4) Main plugin page as last resort.
             try:
                 html_req = urllib.request.Request(base_url, headers=headers)
-                with self._open_version_response(html_req, timeout=15) as resp:
+                with urllib.request.urlopen(html_req, timeout=15) as resp:
                     html = resp.read().decode("utf-8", errors="ignore")
                 patterns = [
                     r'data-version="(\d+\.\d+(?:\.\d+)?)"',
@@ -1841,7 +1689,7 @@ class ZI_Ops:
 
         # Generic HTML parsing for other sites
         try:
-            with self._open_version_response(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
         except urllib.error.HTTPError as e:
             if log_widget:
@@ -1852,10 +1700,18 @@ class ZI_Ops:
                 self.log(log_widget, f"  ❌ Ошибка запроса: {e}", "red")
             return "?"
 
-        version = self._extract_html_version(html, page_url)
-        if version == "?" and log_widget:
-            self.log(log_widget, f"Версия не найдена на странице {page_url}. Укажи страницу конкретного плагина, а не каталог или комментарии.", "yellow")
-        return version
+        patterns = [
+            r"Version[:\s]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+            r"v([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+            r'"version"[:\s]+"([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+            r">([0-9]+\.[0-9]+(?:\.[0-9]+)?)</span>\s*<span[^>]*>Latest",
+            r"Version\s*</\w+>\s*<[^>]*>([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        ]
+        for pat in patterns:
+            m = re.search(pat, html, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        return "?"
 
     def _normalize_version(self, version):
         """Нормализует plugin-version в канонический вид.
@@ -2870,10 +2726,10 @@ class ZI_Ops:
             if not client or not client.connected:
                 self.root.after(0, lambda: self.log(self.rcon_log, "❌ Нет подключения", "red"))
                 return
-            self.root.after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 10 сек)...", "cyan"))
+            self.root.after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 5 сек)...", "cyan"))
             try:
-                result = client.send("status", wait=True, timeout=10)
-                self.root.after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r}", "yellow" if r.startswith("[") else "green"))
+                result = client.send("status", wait=True, timeout=5)
+                self.root.after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r}", "green"))
             except Exception as e:
                 self.root.after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка: {e}", "red"))
         threading.Thread(target=worker, daemon=True).start()
@@ -2887,9 +2743,9 @@ class ZI_Ops:
             if not client or not client.connected:
                 self.root.after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
                 return
-            self.root.after(0, lambda: self.log(log_widget, f"> {cmd} (ожидание ответа)", "cyan"))
+            self.root.after(0, lambda: self.log(log_widget, f"> {cmd}", "cyan"))
             try:
-                result = client.send(cmd, wait=True, timeout=10)
+                result = client.send(cmd, wait=True, timeout=5)
                 color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
                 self.log(log_widget, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
             except Exception as e:
@@ -2935,7 +2791,7 @@ class ZI_Ops:
                     raise RuntimeError("Соединение потеряно.")
                 for cmd in commands:
                     self.log(self.rcon_log, "> " + cmd, "cyan")
-                    result = client.send(cmd, wait=True, timeout=10)
+                    result = client.send(cmd, wait=True, timeout=5)
                     color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
                     self.log(self.rcon_log, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
                 self.log(self.rcon_log, "Команды смены карты обработаны; результаты смотри выше.", "cyan")
@@ -3020,7 +2876,7 @@ class ZI_Ops:
                 except Exception:
                     pass
 
-    def _ftp_download_with_retry(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=10):
+    def _ftp_download_with_retry(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=3):
         """Скачивает файл и восстанавливает FTP data-channel после 425/426.
 
         Некоторые хостинги периодически отклоняют passive data connection с

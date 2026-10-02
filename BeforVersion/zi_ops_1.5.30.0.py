@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.5.32.0
-#    nuitka-project: --product-version=1.5.32.0
+#    nuitka-project: --file-version=1.5.30.0
+#    nuitka-project: --product-version=1.5.30.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -41,7 +41,7 @@ import ctypes
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.5.32.0"
+APP_VERSION = "1.5.30.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -252,76 +252,38 @@ class RustRCON:
                 pass
         self.connected = False
 
-    def send(self, command, wait=False, timeout=10):
+    def send(self, command, wait=False, timeout=5):
         with self._lock:
             if not self.connected or not self.ws:
                 raise RuntimeError("Нет подключения")
             self._msg_id += 1
-            request_id = self._msg_id
-            payload = {"Identifier": request_id, "Message": command, "Name": "RustManager"}
+            payload = {"Identifier": self._msg_id, "Message": command, "Name": "RustManager"}
             self.ws.settimeout(self.timeout)
             self.ws.send(json.dumps(payload))
             if not wait:
                 return "Команда отправлена"
             deadline = time.monotonic() + max(0.1, timeout)
-            frames = 0
-
-            def no_reply():
-                if frames == 0:
-                    return "[Таймаут: WebSocket не вернул ни одного сообщения после отправки команды]"
-                return f"[Таймаут: получено сообщений {frames}, но нет ответа с ID {request_id}]"
-
-            def packets(value):
-                if isinstance(value, list):
-                    for entry in value:
-                        yield from packets(entry)
-                elif isinstance(value, dict):
-                    lowered = {str(key).lower(): val for key, val in value.items()}
-                    if "identifier" in lowered:
-                        yield lowered
-                    for key in ("data", "payload", "response"):
-                        nested = lowered.get(key)
-                        if isinstance(nested, str):
-                            try: nested = json.loads(nested)
-                            except ValueError: continue
-                        if isinstance(nested, (dict, list)):
-                            yield from packets(nested)
-
             try:
                 while True:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        return no_reply()
+                        return "[Таймаут: сервер не ответил вовремя]"
                     self.ws.settimeout(remaining)
-                    response = self.ws.recv()
-                    if response is None or response == "" or response == b"":
-                        self.connected = False
-                        return "[WebSocket закрыт сервером без ответа]"
-                    frames += 1
-                    raw = response.decode("utf-8", errors="replace") if isinstance(response, bytes) else str(response)
+                    resp = self.ws.recv()
+                    if not resp:
+                        return "[Пустой ответ]"
                     try:
-                        data = json.loads(raw)
-                    except (ValueError, TypeError):
-                        # Plain text is shown unchanged; do not discard it or truncate it.
-                        return raw
-                    for packet in packets(data):
-                        try:
-                            identifier = int(packet.get("identifier"))
-                        except (ValueError, TypeError, OverflowError):
-                            continue
-                        if identifier == request_id:
-                            message = packet.get("message", packet.get("output", packet.get("result", "")))
-                            if isinstance(message, (dict, list)):
-                                return json.dumps(message, ensure_ascii=False)
-                            return str(message) if message is not None else ""
+                        data = json.loads(resp)
+                    except json.JSONDecodeError:
+                        return f"[Raw: {str(resp)[:200]}]"
+                    # Rust RCON can send messages unrelated to our request.
+                    if data.get("Identifier") == self._msg_id:
+                        return str(data.get("Message", ""))
             except websocket.WebSocketTimeoutException:
-                return no_reply()
-            except Exception as exc:
+                return "[Таймаут: сервер не ответил вовремя]"
+            except Exception as e:
                 self.connected = False
-                raise RuntimeError(f"RCON соединение потеряно: {exc}")
-            finally:
-                try: self.ws.settimeout(self.timeout)
-                except Exception: pass
+                raise RuntimeError(f"RCON соединение потеряно: {e}")
 
 
 class ZI_Ops:
@@ -1190,7 +1152,7 @@ class ZI_Ops:
         # Page
         ent_p = ttk.Entry(frame, textvariable=pv, width=24)
         ent_p.pack(side="left", padx=2)
-        Tooltip(ent_p, "Страница для проверки актуальной версии. Страница конкретного плагина: uMod, Codefling, RustPlugin, Lone Design или GitHub releases")
+        Tooltip(ent_p, "Страница для проверки актуальной версии. Например: https://github.com/автор/репо/releases или https://umod.org/plugins/plugin-name")
         # Remote
         ent_r = ttk.Entry(frame, textvariable=rv, width=20)
         ent_r.pack(side="left", padx=2)
@@ -1430,8 +1392,8 @@ class ZI_Ops:
                     version = self._normalize_version(version)
                     base_name = os.path.splitext(filename)[0].lower()
 
-                    matched = next((r for r in rows if r["name"] in (base_name, self._plugin_key(name)) or r["remote"] == filename.lower()), None)
-                    if matched and matched["page"]:
+                    matched = next((r for r in rows if r["name"] == base_name or r["remote"] == filename.lower()), None)
+                    if matched and matched["page"] and version != "?":
                         page_key = matched["page"].strip()
                         if page_key not in latest_cache:
                             latest_cache[page_key] = self._fetch_latest_version(page_key, self.plugins_log)
@@ -1445,10 +1407,6 @@ class ZI_Ops:
                             elif cmp is not None and cmp < 0:
                                 status, status_tag = "ℹ️ На сервере новее", "yellow"
 
-                    if not matched or not matched["page"]:
-                        self.log(self.plugins_log, f"Нет страницы версии для {filename}. Добавь ссылку в «Страница версии» списка плагинов.", "yellow")
-                    if version == "?":
-                        self.log(self.plugins_log, f"Не удалось прочитать Info из {filename}; файл может быть обфусцирован или иметь другой формат.", "yellow")
                     self.root.after(0, lambda fn=filename,n=name,a=author,v=version,lv=latest_version,st=status,tg=status_tag:
                         self._insert_plugin_row(fn,n,a,v,lv,st,tg))
                     self.log(self.plugins_log, f"{status} {name} | Установлено: {version} | Последняя: {latest_version}",
@@ -1603,110 +1561,6 @@ class ZI_Ops:
         self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
         self._apply_installed_plugins_sort()
 
-    def _open_version_response(self, request, timeout=15):
-        """Retry transient errors, honoring Retry-After and cancellation."""
-        for attempt in range(1, 11):
-            if self.stop_event.is_set():
-                raise RuntimeError("Проверка остановлена")
-            host = urllib.parse.urlsplit(request.full_url).hostname or ""
-            if host == "umod.org" or host.endswith(".umod.org"):
-                delay = max(0, 1.0 - (time.monotonic() - getattr(self, "_umod_last_request", 0)))
-                if delay and self.stop_event.wait(delay):
-                    raise RuntimeError("Проверка остановлена")
-                self._umod_last_request = time.monotonic()
-            try:
-                return urllib.request.urlopen(request, timeout=timeout)
-            except urllib.error.HTTPError as exc:
-                if attempt == 10 or exc.code not in (408, 429, 500, 502, 503, 504):
-                    raise
-                delay = min(30, 2 ** min(attempt, 5))
-                retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
-                try:
-                    delay = max(delay, float(retry_after))
-                except ValueError:
-                    try:
-                        from email.utils import parsedate_to_datetime
-                        delay = max(delay, parsedate_to_datetime(retry_after).timestamp() - time.time())
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-                exc.close()
-            except (urllib.error.URLError, TimeoutError, OSError):
-                if attempt == 10:
-                    raise
-                delay = min(30, 2 ** min(attempt, 5))
-            self.log(self.plugins_log, f"Повтор запроса версии {host}: попытка {attempt + 1}/10 через {int(delay)} сек.", "yellow")
-            if self.stop_event.wait(delay):
-                raise RuntimeError("Проверка остановлена")
-
-    @staticmethod
-    def _extract_html_version(source, page_url=""):
-        from html import unescape
-
-        def valid(value):
-            text = str(value or "").strip()
-            match = re.fullmatch(r"[vV]?(\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?)", text)
-            return match.group(1) if match else None
-
-        def same_page(url):
-            if not page_url or not isinstance(url, str):
-                return True
-            current = urllib.parse.urlsplit(page_url)
-            candidate = urllib.parse.urlsplit(urllib.parse.urljoin(page_url, url))
-            return (current.hostname, current.path.rstrip("/")) == (candidate.hostname, candidate.path.rstrip("/"))
-
-        def structured(value):
-            if isinstance(value, list):
-                for item in value:
-                    result = structured(item)
-                    if result:
-                        return result
-            elif isinstance(value, dict):
-                kind = value.get("@type", "")
-                kinds = kind if isinstance(kind, list) else [kind]
-                if any(k in ("SoftwareApplication", "WebApplication", "CreativeWork", "Product") for k in kinds):
-                    if same_page(value.get("url")):
-                        result = valid(value.get("softwareVersion")) or valid(value.get("version"))
-                        if result:
-                            return result
-                return structured(value.get("@graph"))
-            return None
-
-        # Codefling exposes softwareVersion; XenForo marketplaces expose CreativeWork.version.
-        for script in re.findall(r'<script\b[^>]*\btype\s*=\s*[\"\']application/ld\+json[\"\'][^>]*>(.*?)</script>', source, re.I | re.S):
-            try:
-                data = json.loads(script.strip())
-            except ValueError:
-                continue
-            result = structured(data)
-            if result:
-                return result
-        patterns = (
-            r'<[^>]*\bitemprop\s*=\s*[\"\']softwareVersion[\"\'][^>]*\bcontent\s*=\s*[\"\']([^\"\']+)',
-            r'<[^>]*\bitemprop\s*=\s*[\"\']softwareVersion[\"\'][^>]*>\s*([^<]+)',
-            r'\bdata-version\s*=\s*[\"\']([^\"\']+)',
-            r'<[^>]*class\s*=\s*[\"\'][^\"\']*(?:resourceHeader-version|p-title-value-version|plugin-version)[^\"\']*[\"\'][^>]*>\s*([^<]+)',
-        )
-        for pattern in patterns:
-            for match in re.finditer(pattern, source, re.I):
-                result = valid(unescape(match.group(1)))
-                if result:
-                    return result
-        # Explicit version fields in a product information table; exclude scripts/comments and arbitrary v-numbers.
-        clean = re.sub(r'<(?:script|style)\b[^>]*>.*?</(?:script|style)>|<!--.*?-->', '', source, flags=re.I | re.S)
-        for match in re.finditer(r'<(?:tr|dl)\b[^>]*>(.*?)</(?:tr|dl)>', clean, re.I | re.S):
-            text = unescape(re.sub(r'<[^>]+>', ' ', match.group(1)))
-            match_version = re.search(r'(?:Plugin\s+Version|Current\s+Version|Version|Версия)\s*:?\s*[vV]?(\d+(?:\.\d+){1,3})\b', text, re.I)
-            if match_version:
-                return match_version.group(1)
-        # Current resource title, as used by marketplaces; never search plugin descriptions/reviews.
-        for heading in re.findall(r'<h1\b[^>]*>(.*?)</h1>', clean, re.I | re.S):
-            text = unescape(re.sub(r'<[^>]+>', ' ', heading)).strip()
-            match = re.search(r'\s+[vV]?(\d+(?:\.\d+){1,3})\s*$', text)
-            if match:
-                return match.group(1)
-        return "?"
-
-
     def _fetch_latest_version(self, page_url, log_widget=None):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1716,16 +1570,10 @@ class ZI_Ops:
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
         }
-        parts_url = urllib.parse.urlsplit(page_url)
-        host = (parts_url.hostname or "").lower()
-        if parts_url.scheme not in ("http", "https") or not host:
-            if log_widget:
-                self.log(log_widget, "Некорректная ссылка на страницу версии.", "yellow")
-            return "?"
         req = urllib.request.Request(page_url, headers=headers)
 
         # GitHub API
-        if host == "github.com" or host == "www.github.com":
+        if "github.com" in page_url:
             parts = page_url.replace("https://", "").replace("http://", "").split("/")
             if len(parts) >= 3:
                 owner, repo = parts[1], parts[2]
@@ -1735,7 +1583,7 @@ class ZI_Ops:
                     "Accept": "application/vnd.github.v3+json"
                 })
                 try:
-                    with self._open_version_response(api_req, timeout=15) as resp:
+                    with urllib.request.urlopen(api_req, timeout=15) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                         tag = data.get("tag_name", "")
                         return tag.lstrip("v").strip()
@@ -1747,7 +1595,7 @@ class ZI_Ops:
         # uMod: prefer the official latest.json endpoint.
         # It is much more reliable for version checking than scraping the main page,
         # and uMod documents this JSON-style plugin endpoint for update tooling.
-        if host in ("umod.org", "www.umod.org") and "/plugins/" in parts_url.path:
+        if "umod.org" in page_url and "/plugins/" in page_url:
             slug = page_url.split("/plugins/")[-1].split("/")[0].split("?")[0].strip()
             base_url = f"https://umod.org/plugins/{slug}"
 
@@ -1759,7 +1607,7 @@ class ZI_Ops:
                     "Accept": "application/json,text/plain,*/*",
                     "Referer": base_url,
                 })
-                with self._open_version_response(latest_req, timeout=15) as resp:
+                with urllib.request.urlopen(latest_req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8", errors="ignore"))
                     ver = data.get("version") or data.get("latest_release_version")
                     if ver:
@@ -1779,7 +1627,7 @@ class ZI_Ops:
                     "Accept": "application/json",
                     "Referer": base_url,
                 })
-                with self._open_version_response(api_req, timeout=15) as resp:
+                with urllib.request.urlopen(api_req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8", errors="ignore"))
                     ver = data.get("latest_release_version") or data.get("version") or data.get("latest_release", {}).get("version")
                     if ver:
@@ -1797,7 +1645,7 @@ class ZI_Ops:
             updates_url = f"{base_url}/updates"
             try:
                 updates_req = urllib.request.Request(updates_url, headers=headers)
-                with self._open_version_response(updates_req, timeout=15) as resp:
+                with urllib.request.urlopen(updates_req, timeout=15) as resp:
                     html = resp.read().decode("utf-8", errors="ignore")
 
                 # First release heading/version on uMod's updates page.
@@ -1820,7 +1668,7 @@ class ZI_Ops:
             # 4) Main plugin page as last resort.
             try:
                 html_req = urllib.request.Request(base_url, headers=headers)
-                with self._open_version_response(html_req, timeout=15) as resp:
+                with urllib.request.urlopen(html_req, timeout=15) as resp:
                     html = resp.read().decode("utf-8", errors="ignore")
                 patterns = [
                     r'data-version="(\d+\.\d+(?:\.\d+)?)"',
@@ -1841,7 +1689,7 @@ class ZI_Ops:
 
         # Generic HTML parsing for other sites
         try:
-            with self._open_version_response(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
         except urllib.error.HTTPError as e:
             if log_widget:
@@ -1852,10 +1700,18 @@ class ZI_Ops:
                 self.log(log_widget, f"  ❌ Ошибка запроса: {e}", "red")
             return "?"
 
-        version = self._extract_html_version(html, page_url)
-        if version == "?" and log_widget:
-            self.log(log_widget, f"Версия не найдена на странице {page_url}. Укажи страницу конкретного плагина, а не каталог или комментарии.", "yellow")
-        return version
+        patterns = [
+            r"Version[:\s]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+            r"v([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+            r'"version"[:\s]+"([0-9]+\.[0-9]+(?:\.[0-9]+)?)"',
+            r">([0-9]+\.[0-9]+(?:\.[0-9]+)?)</span>\s*<span[^>]*>Latest",
+            r"Version\s*</\w+>\s*<[^>]*>([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        ]
+        for pat in patterns:
+            m = re.search(pat, html, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        return "?"
 
     def _normalize_version(self, version):
         """Нормализует plugin-version в канонический вид.
@@ -2078,8 +1934,6 @@ class ZI_Ops:
         cb_ftps.grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         Tooltip(cb_ftps, "Включи, если хостинг требует шифрованное соединение FTPS. В FileZilla это Protocol=0 (обычный FTP), но некоторые хостинги требуют TLS.")
         ftp_frame.columnconfigure(1, weight=1)
-        self.ftp_test_button = ttk.Button(ftp_frame, text="Проверить FTP и базовую папку", command=self.test_ftp_settings)
-        self.ftp_test_button.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         rcon_frame = ttk.LabelFrame(self.tab_settings, text=" RCON Настройки ", padding=10)
         rcon_frame.pack(fill="x", padx=10, pady=5)
@@ -2275,110 +2129,12 @@ class ZI_Ops:
         for f in self.DEFAULT_WIPE_FOLDERS:
             self.wipe_folders_text.insert("end", f + "\n")
 
-    def _show_operation_preview(self, parent, title, lines, action=None):
-        previous = getattr(self, "_preview_panel", None)
-        if previous is not None and previous.winfo_exists():
-            previous.destroy()
-        panel = ttk.Frame(parent, padding=14, relief="solid", borderwidth=1)
-        self._preview_panel = panel
-        panel.place(relx=0.02, rely=0.02, relwidth=0.96, relheight=0.96)
-        panel.lift()
-        ttk.Label(panel, text=title, font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, 10))
-        area = ttk.Frame(panel)
-        area.pack(fill="both", expand=True)
-        text = tk.Text(area, wrap="word", state="normal", font=("Consolas", 10),
-                       bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), relief="flat")
-        text.pack(side="left", fill="both", expand=True)
-        scroll = ttk.Scrollbar(area, orient="vertical", command=text.yview)
-        scroll.pack(side="right", fill="y")
-        text.configure(yscrollcommand=scroll.set)
-        text.insert("end", "\n".join(lines) + "\n")
-        text.configure(state="disabled")
-        self._config_log_tags(text)
-        footer = ttk.Frame(panel)
-        footer.pack(fill="x", pady=(10, 0))
-        ttk.Button(footer, text="Отмена" if action else "Закрыть", command=panel.destroy).pack(side="left")
-        if action:
-            def proceed():
-                panel.destroy()
-                action()
-            ttk.Button(footer, text="Выполнить", style="Warn.TButton", command=proceed).pack(side="right")
-        return text
-
-    def _wipe_preview_lines(self, cfg):
-        lines = ["На сервере будут выполнены следующие действия:", ""]
-        for filename in cfg["files"]:
-            lines.append("УДАЛИТЬ ФАЙЛ: " + self._remote_path(cfg["base"], filename))
-        for folder in cfg["folders"]:
-            lines.append("ОЧИСТИТЬ ПАПКУ И ВСЁ ЕЁ СОДЕРЖИМОЕ: " + self._remote_path(cfg["base"], folder))
-        if cfg["change_seed"]:
-            lines += ["", f"Seed: {cfg['seed']}; размер карты: {cfg['worldsize']}"]
-            if cfg["cfg_template"]:
-                if not os.path.isfile(cfg["cfg_template"]):
-                    raise ValueError("Шаблон server.cfg не найден. Проверь локальный путь.")
-                lines += ["ШАБЛОН: " + cfg["cfg_template"],
-                          "ЗАПИСАТЬ: " + self._remote_path(cfg["base"], "server.cfg")]
-            else:
-                lines.append("СКОПИРОВАТЬ SEED В БУФЕР: server.cfg не будет загружен.")
-        if cfg["restart"]:
-            lines += ["", f"RCON: объявление и рестарт через {cfg['restart_sec']} сек.",
-                      "Сообщение: " + cfg["restart_msg"]]
-        if not cfg["files"] and not cfg["folders"] and not cfg["change_seed"] and not cfg["restart"]:
-            raise ValueError("Не выбрано ни одного действия.")
-        lines += ["", "Проверь пути. Нажатие «Выполнить» запускает именно этот список действий."]
-        return lines
-
-    def test_ftp_settings(self):
-        if getattr(self, "_ftp_check_running", False):
-            return
-        cfg = self._snapshot_ftp_config()
-        base = self.base_var.get().strip().replace("\\", "/") or "."
-        if any(char in base for char in "\r\n\x00"):
-            messagebox.showerror("FTP", "Недопустимый базовый путь.")
-            return
-        text = self._show_operation_preview(self.tab_settings, "Проверка FTP",
-            ["Проверяем подключение и содержимое базовой папки: " + base])
-        self._ftp_check_running = True
-        self.ftp_test_button.configure(state="disabled")
-        threading.Thread(target=self._test_ftp_worker, args=(cfg, base, text), daemon=True,
-                         name="ftp-test-worker").start()
-
-    def _test_ftp_worker(self, cfg, base, text):
-        ftp = None
-        try:
-            ftp = self.ftp_connect(text, cfg)
-            if ftp is None:
-                return
-            ftp.cwd(base)
-            self.log(text, "Открытая папка: " + ftp.pwd(), "cyan")
-            names = []
-            ftp.retrlines("LIST", names.append)
-            self.log(text, "Содержимое папки:", "cyan")
-            for name in names:
-                self.log(text, name)
-            if not names:
-                self.log(text, "Папка пуста.", "yellow")
-            self.log(text, "Проверка подключения и чтения папки завершена.", "green")
-        except Exception as exc:
-            self.log(text, f"Ошибка проверки FTP: {exc}", "red")
-        finally:
-            if ftp:
-                try: ftp.quit()
-                except Exception:
-                    try: ftp.close()
-                    except Exception: pass
-            self.root.after(0, self._finish_ftp_check)
-
-    def _finish_ftp_check(self):
-        self._ftp_check_running = False
-        self.ftp_test_button.configure(state="normal")
-
-
     def start_wipe(self):
         with self.running_lock:
             if self._running:
                 self.log(self.wipe_log, "⚠️ Другая операция уже выполняется.", "yellow")
                 return
+            self._running = True
 
         # Snapshot all Tk state in the UI thread.
         cfg = {
@@ -2408,24 +2164,6 @@ class ZI_Ops:
             messagebox.showwarning("Параметры вайпа", str(e))
             return
 
-        try:
-            if cfg["change_seed"] and cfg["random_seed"]:
-                cfg["seed"] = str(random.randint(1, RustMapsAPI.MAX_SEED))
-                cfg["random_seed"] = False
-                self.wipe_seed_var.set(cfg["seed"])
-            lines = self._wipe_preview_lines(cfg)
-        except ValueError as exc:
-            messagebox.showwarning("Предпросмотр вайпа", str(exc))
-            return
-        self._show_operation_preview(self.tab_wipe, "Предпросмотр вайпа", lines,
-                                     lambda: self._begin_wipe(cfg))
-
-    def _begin_wipe(self, cfg):
-        with self.running_lock:
-            if self._running:
-                self.log(self.wipe_log, "Другая операция уже выполняется.", "yellow")
-                return
-            self._running = True
         self.stop_event.clear()
         self.stop_requested = False
         self.wipe_start_btn.config(state="disabled")
@@ -2630,16 +2368,6 @@ class ZI_Ops:
             messagebox.showerror("Судная ночь", str(exc))
             return
         cfg = {"ftp": self._snapshot_ftp_config(), "uploads": uploads, "delete": deletes}
-        lines = ["Начало ночи" if on else "Конец ночи", ""]
-        for local, remote in uploads:
-            lines += ["УСТАНОВИТЬ: " + remote, "  Из файла: " + local]
-        for remote in deletes:
-            lines.append("УДАЛИТЬ: " + remote)
-        lines += ["", "Остальные файлы не меняются. Перед операцией сохраняются резервные копии."]
-        self._show_operation_preview(self.tab_judgment, "Предпросмотр судной ночи", lines,
-                                     lambda: self._begin_judgment(cfg))
-
-    def _begin_judgment(self, cfg):
         with self.running_lock:
             if self._running:
                 return
@@ -2870,10 +2598,10 @@ class ZI_Ops:
             if not client or not client.connected:
                 self.root.after(0, lambda: self.log(self.rcon_log, "❌ Нет подключения", "red"))
                 return
-            self.root.after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 10 сек)...", "cyan"))
+            self.root.after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 5 сек)...", "cyan"))
             try:
-                result = client.send("status", wait=True, timeout=10)
-                self.root.after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r}", "yellow" if r.startswith("[") else "green"))
+                result = client.send("status", wait=True, timeout=5)
+                self.root.after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r[:500]}", "green"))
             except Exception as e:
                 self.root.after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка: {e}", "red"))
         threading.Thread(target=worker, daemon=True).start()
@@ -2887,11 +2615,10 @@ class ZI_Ops:
             if not client or not client.connected:
                 self.root.after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
                 return
-            self.root.after(0, lambda: self.log(log_widget, f"> {cmd} (ожидание ответа)", "cyan"))
+            self.root.after(0, lambda: self.log(log_widget, f"> {cmd}", "cyan"))
             try:
-                result = client.send(cmd, wait=True, timeout=10)
-                color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
-                self.log(log_widget, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
+                result = client.send(cmd, wait=False)
+                self.root.after(0, lambda r=result: self.log(log_widget, r, "green"))
             except Exception as e:
                 self.root.after(0, lambda e=e: self.log(log_widget, f"❌ Ошибка: {e}", "red"))
         threading.Thread(target=worker, daemon=True).start()
@@ -2934,11 +2661,9 @@ class ZI_Ops:
                 if not client or not client.connected:
                     raise RuntimeError("Соединение потеряно.")
                 for cmd in commands:
-                    self.log(self.rcon_log, "> " + cmd, "cyan")
-                    result = client.send(cmd, wait=True, timeout=10)
-                    color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
-                    self.log(self.rcon_log, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
-                self.log(self.rcon_log, "Команды смены карты обработаны; результаты смотри выше.", "cyan")
+                    client.send(cmd, wait=False)
+                    time.sleep(0.15)
+                self.log(self.rcon_log, "✅ Команды отправлены.", "green")
             except Exception as e:
                 self.log(self.rcon_log, f"❌ Ошибка: {e}", "red")
         threading.Thread(target=worker, daemon=True, name="rcon-wipe-worker").start()
@@ -3020,7 +2745,7 @@ class ZI_Ops:
                 except Exception:
                     pass
 
-    def _ftp_download_with_retry(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=10):
+    def _ftp_download_with_retry(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=3):
         """Скачивает файл и восстанавливает FTP data-channel после 425/426.
 
         Некоторые хостинги периодически отклоняют passive data connection с
@@ -3073,8 +2798,6 @@ class ZI_Ops:
                 self.root.after(0, lambda w=widget, t=text, c=color: self.log(w, t, c))
             except Exception:
                 pass
-            return
-        if not widget.winfo_exists():
             return
         widget.config(state="normal")
         widget.insert("end", text + "\n", color)
