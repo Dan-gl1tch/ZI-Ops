@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1e1e2e">
+  <meta name="description" content="ZI-Ops — управление сервером Rust: вайп, судная ночь, RCON, Query и обновление плагинов. Скачать EXE для Windows.">
+  <title>ZI-Ops — управление сервером Rust</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к содержимому</a>
+  <header class="header">
+    <div class="container navigation">
+      <a class="brand" href="#home" aria-label="ZI-Ops — главная"><span class="logo">ZI</span><span>ZI-Ops<small>ZombiIsland Operations</small></span></a>
+      <nav aria-label="Главное меню">
+        <a href="#home">Главная</a><a href="#about">О программе</a><a href="#versions">Версии</a>
+        <a class="nav-download" href="https://github.com/Dan-gl1tch/ZI-Ops/releases/download/ver-1_6_2_0/ZI-Ops.exe" data-download>Скачать EXE <span aria-hidden="true">↓</span></a>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero container" id="home">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot"></span> ДЛЯ СЕРВЕРОВ RUST</p>
+        <h1>Сервер под<br>вашим <span>контролем.</span></h1>
+        <p class="lead">Вайп, плагины и команды сервера — в одном окне. ZI-Ops помогает с повседневным управлением, чтобы меньше времени уходило на ручную работу.</p>
+        <div class="actions"><a class="button primary" data-download href="https://github.com/Dan-gl1tch/ZI-Ops/releases/download/ver-1_6_2_0/ZI-Ops.exe">Скачать для Windows <span aria-hidden="true">↓</span></a><a class="button secondary" href="#about">Что умеет программа <span aria-hidden="true">↗</span></a></div>
+        <p class="download-meta">Версия <strong data-version>1.6.2.0</strong><span>·</span> EXE <span>·</span> Бесплатно</p>
+      </div>
+      <div class="app-window" aria-label="Иллюстрация интерфейса ZI-Ops">
+        <div class="window-title"><span><b class="mini-logo">ZI</b> ZI-Ops</span><span class="window-controls" aria-hidden="true">—　□　×</span></div>
+        <div class="app-tabs"><span>Вайп</span><span>Судная ночь</span><span>RCON</span><span class="selected">Плагины</span></div>
+        <div class="app-body">
+          <div class="panel-heading"><span>Установленные плагины</span><span class="sample">Пример интерфейса</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Файл</th><th>Версия</th><th>Кастомный</th><th>Статус</th></tr></thead><tbody><tr><td>Example.cs</td><td>2.1.0</td><td>☐</td><td class="green">Актуально</td></tr><tr><td>MyPlugin.cs</td><td>1.0.0</td><td>☑</td><td class="yellow">Есть обновление</td></tr><tr><td>Another.cs</td><td>3.0.1</td><td>☐</td><td class="green">Актуально</td></tr></tbody></table></div>
+          <div class="mock-actions"><span>Проверить версии</span><span>Обновить все</span></div>
+          <div class="console"><p class="blue">&gt; Проверка версий завершена</p><p class="green">Актуальные плагины пропущены</p><p class="blue">Кастомный исходник сохранён в Custom</p></div>
+          <div class="app-status"><span class="dot"></span> Готово <span>ZI-Ops <span data-version>1.6.2.0</span></span></div>
+        </div>
+      </div>
+    </section>
+    <div class="protocols container"><span>Один инструмент. Разные задачи.</span><div>FTP / FTPS <i>·</i> WebRCON <i>·</i> Query <i>·</i> RustMaps</div></div>
+    <section class="section container" id="about">
+      <div class="section-heading"><div><p class="eyebrow">О ПРОГРАММЕ</p><h2>Всё, что нужно<br>для работы с сервером.</h2></div><p>Подключите нужные сервисы в настройках и работайте со своим сервером через понятные вкладки.</p></div>
+      <div class="features">
+        <article class="feature"><span class="feature-number">01 / ВАЙП</span><h3>Новая карта, новый старт</h3><p>Удаление заданных файлов, очистка папок и подготовка server.cfg с новым seed и размером карты. Перед запуском — список действий и полные пути.</p></article>
+        <article class="feature"><span class="feature-number">02 / ПЛАГИНЫ</span><h3>Обновления без лишних замен</h3><p>Сравнение версий и обновление только устаревших плагинов. Новые исходники кастомных плагинов сохраняются в Custom для переноса ваших патчей.</p></article>
+        <article class="feature"><span class="feature-number">03 / RCON + QUERY</span><h3>Команды и состояние сервера</h3><p>Быстрые команды, ручной ввод с подсказками и ответы в консоли. Query показывает публичный статус и обновляется, пока открыта вкладка RCON.</p></article>
+        <article class="feature"><span class="feature-number">04 / СУДНАЯ НОЧЬ</span><h3>Ваш сценарий переключения</h3><p>Выберите файлы для начала и конца ночи. Программа меняет только указанные пути и сохраняет резервные копии затрагиваемых серверных файлов.</p></article>
+      </div>
+      <div class="guide"><div><h3>Первый запуск — с настройки подключений</h3><p>Адреса и порты FTP, RCON и Query берутся из панели хостинга. Для генерации карт нужен ваш RustMaps API Key.</p></div><a class="text-link" href="https://github.com/Dan-gl1tch/ZI-Ops/blob/main/DOCUMENTATION.md" target="_blank" rel="noopener noreferrer">Открыть документацию ↗</a></div>
+    </section>
+    <section class="versions-section" id="versions"><div class="container section">
+      <div class="section-heading"><div><p class="eyebrow">ВЕРСИИ</p><h2>Программа развивается.</h2></div><p>Последний стабильный выпуск и предыдущие версии. Каждая кнопка скачивания ведёт прямо на EXE.</p></div>
+      <p id="release-status" class="release-status" role="status" aria-live="polite">Получаем список версий…</p>
+      <div id="releases" class="releases"><article class="release"><div class="release-heading"><h3>1.6.2.0</h3><span class="badge">Доступный выпуск</span></div><p>Кастомные плагины скачиваются в отдельную папку Custom для доработки, без автоматической замены на сервере.</p><a class="button secondary" href="https://github.com/Dan-gl1tch/ZI-Ops/releases/download/ver-1_6_2_0/ZI-Ops.exe">Скачать EXE ↓</a></article></div>
+      <button id="more-releases" class="button secondary more" hidden type="button">Показать предыдущие версии</button>
+      <a class="text-link history-link" href="https://github.com/Dan-gl1tch/ZI-Ops/blob/main/BeforVersion/PATCH_NOTES.md" target="_blank" rel="noopener noreferrer">Полная история изменений ↗</a>
+      <noscript><p class="release-status">Для автоматического списка версий включите JavaScript. EXE 1.6.2.0 доступен по кнопкам скачивания.</p></noscript>
+    </div></section>
+    <section class="container final-cta"><div><p class="eyebrow">ZI-OPS ДЛЯ WINDOWS</p><h2>Меньше рутины.<br>Больше времени на сервер.</h2><p>Скачайте программу, настройте подключения и начните с нужной вкладки.</p></div><a class="button primary" data-download href="https://github.com/Dan-gl1tch/ZI-Ops/releases/download/ver-1_6_2_0/ZI-Ops.exe">Скачать EXE <span data-version>1.6.2.0</span> ↓</a></section>
+  </main>
+  <footer class="footer container"><div><a class="brand" href="#home"><span class="logo">ZI</span><span>ZI-Ops<small>Автор: danilmine_D47</small></span></a></div><div class="footer-links"><a href="https://github.com/Dan-gl1tch/ZI-Ops" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://t.me/DanStudios47" target="_blank" rel="noopener noreferrer">Telegram ↗</a><a href="https://www.donationalerts.com/r/danilmine_" target="_blank" rel="noopener noreferrer">Поддержать автора ↗</a></div><p>Не передавайте config.json вместе с программой: он может содержать ваши пароли и API-ключ.</p></footer>
+  <script>
+  'use strict';
+  // JavaScript встроен сюда, чтобы сайт состоял только из двух файлов.
+  const REPO = 'Dan-gl1tch/ZI-Ops';
+  const API = `https://api.github.com/repos/${REPO}/releases`;
+  const CACHE_KEY = 'zi-ops-releases-v1';
+  const CACHE_TTL = 10 * 60 * 1000;
+  let releases = [], nextPage = 1;
+  const status = document.getElementById('release-status');
+  const more = document.getElementById('more-releases');
+  function versionOf(release) {
+    const match = String(release.tag_name || release.name || '').match(/\d+(?:[._]\d+){1,3}/);
+    return match ? match[0].replaceAll('_', '.') : (release.name || release.tag_name || 'Выпуск');
+  }
+  function exeOf(release) {
+    const assets = Array.isArray(release.assets) ? release.assets : [];
+    const valid = assets.filter(a => /\.exe$/i.test(a.name || '') && typeof a.browser_download_url === 'string' && a.browser_download_url.startsWith(`https://github.com/${REPO}/releases/download/`));
+    return valid.find(a => /^ZI[-_ ]?Ops\.exe$/i.test(a.name)) || valid[0];
+  }
+  function compareReleases(a, b) {
+    const av = versionOf(a).split('.').map(Number), bv = versionOf(b).split('.').map(Number);
+    if (av.every(Number.isFinite) && bv.every(Number.isFinite)) {
+      for (let i = 0; i < 4; i++) { const diff = (bv[i] || 0) - (av[i] || 0); if (diff) return diff; }
+    }
+    return (Date.parse(b.published_at) || 0) - (Date.parse(a.published_at) || 0);
+  }
+  function make(tag, className, text) {
+    const el = document.createElement(tag); el.className = className; if (text) el.textContent = text; return el;
+  }
+  function render() {
+    const visible = releases.filter(r => !r.draft).sort(compareReleases);
+    const latest = visible.find(r => !r.prerelease && exeOf(r));
+    if (latest) {
+      document.querySelectorAll('[data-version]').forEach(el => el.textContent = versionOf(latest));
+      document.querySelectorAll('[data-download]').forEach(el => el.href = exeOf(latest).browser_download_url);
+    }
+    if (!visible.length) return;
+    const fragment = document.createDocumentFragment();
+    visible.forEach(release => {
+      const card = make('article', 'release' + (release === latest ? ' latest' : ''));
+      const heading = make('div', 'release-heading'); heading.append(make('h3', '', versionOf(release)));
+      if (release === latest) heading.append(make('span', 'badge', 'Последняя версия'));
+      else if (release.prerelease) heading.append(make('span', 'badge preview-badge', 'Предварительная'));
+      card.append(heading);
+      const date = new Date(release.published_at);
+      if (!Number.isNaN(date.getTime())) { const time = make('time', 'release-date', date.toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'})); time.dateTime = date.toISOString(); card.append(time); }
+      const body = (release.body || '').trim();
+      if (body) { const details = make('details', 'notes'); details.append(make('summary', '', 'Что изменилось'), make('div', 'notes-body', body)); card.append(details); }
+      else card.append(make('p', '', 'Описание этого выпуска не добавлено.'));
+      const exe = exeOf(release);
+      if (exe) { const link = make('a', 'button ' + (release === latest ? 'primary' : 'secondary'), 'Скачать EXE ↓'); link.href = exe.browser_download_url; card.append(link); }
+      else card.append(make('p', 'no-exe', 'EXE для этого выпуска не прикреплён.'));
+      fragment.append(card);
+    });
+    document.getElementById('releases').replaceChildren(fragment);
+  }
+  function saveCache() { try { localStorage.setItem(CACHE_KEY, JSON.stringify({time:Date.now(), releases, nextPage})); } catch {} }
+  async function loadPage() {
+    more.disabled = true;
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`${API}?per_page=100&page=${nextPage}`, {headers:{Accept:'application/vnd.github+json'}, signal:controller.signal});
+      if (!response.ok) throw new Error(`GitHub: ${response.status}`);
+      const data = await response.json(); if (!Array.isArray(data)) throw new Error('Неверный ответ');
+      const seen = new Set(releases.map(r => r.id)); releases.push(...data.filter(r => !seen.has(r.id)));
+      const hasNext = /rel="next"/.test(response.headers.get('Link') || '') || data.length === 100;
+      nextPage++; more.hidden = !hasNext; render(); saveCache();
+      status.textContent = releases.length ? 'Список получен из GitHub Releases.' : 'Опубликованных релизов пока нет. Доступна ссылка на EXE 1.6.2.0.';
+    } catch {
+      status.textContent = releases.length ? 'Не удалось обновить список. Показаны ранее полученные версии; попробуйте позже.' : 'GitHub временно недоступен. Можно скачать EXE 1.6.2.0 по кнопке ниже.';
+    } finally { clearTimeout(timer); more.disabled = false; }
+  }
+  more.addEventListener('click', loadPage);
+  function init() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+      if (cached && Array.isArray(cached.releases) && cached.releases.length && Number.isInteger(cached.nextPage)) {
+        releases = cached.releases; nextPage = cached.nextPage; render();
+        if (Date.now() - cached.time < CACHE_TTL) { more.hidden = releases.length % 100 !== 0; status.textContent = 'Показан недавно полученный список версий.'; return; }
+        // Обновляем с первой страницы, чтобы найти новые релизы.
+        nextPage = 1;
+      }
+    } catch {}
+    loadPage();
+  }
+  init();
+  </script>
+</body>
+</html>
