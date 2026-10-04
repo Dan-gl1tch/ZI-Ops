@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.6.2.0
-#    nuitka-project: --product-version=1.6.2.0
+#    nuitka-project: --file-version=1.6.0.0
+#    nuitka-project: --product-version=1.6.0.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -45,7 +45,7 @@ import zlib
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.6.2.0"
+APP_VERSION = "1.6.0.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -543,10 +543,6 @@ class ZI_Ops:
         self._running = False
         self.stop_requested = False
         self.stop_event = threading.Event()
-        self._http_rate_lock = threading.Lock()
-        self._http_next_request = {}
-        self._http_blocked_until = {}
-        self._plugin_version_cache = {}
         self._rcon_connecting = False
         self.rcon_lock = threading.Lock()
         self.rcon_client = None
@@ -1457,7 +1453,7 @@ class ZI_Ops:
         update_frame = ttk.LabelFrame(self.tab_plugins, text=" 🔄 Автообновление плагинов по URL ", padding=10)
         update_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(update_frame, "Список плагинов для автоматического обновления. Программа скачает → загрузит на сервер → удалит с ПК")
-        ttk.Label(update_frame, text="Обновляются только устаревшие плагины. Новые версии кастомных сохраняются в Custom на ПК.", foreground=_theme_color("#89dceb")).pack(anchor="w")
+        ttk.Label(update_frame, text="Добавь ссылки. Программа скачает → загрузит на сервер → удалит с ПК.", foreground=_theme_color("#89dceb")).pack(anchor="w")
 
         # Header labels for columns
         hdr = ttk.Frame(update_frame)
@@ -1492,7 +1488,7 @@ class ZI_Ops:
         ttk.Button(btn_frame, text="🗑️ Очистить", command=self.clear_plugins).pack(side="left", padx=4)
         btn_upall = ttk.Button(btn_frame, text="🔄 Обновить все", style="Accent.TButton", command=self.update_all_plugins)
         btn_upall.pack(side="right", padx=4)
-        Tooltip(btn_upall, "Обновляет только плагины с подтверждённой новой версией. Актуальные и неизвестные пропускаются. Новые версии кастомных сохраняются в Custom")
+        Tooltip(btn_upall, "Скачивает все плагины по URL из списка и загружает их на сервер через FTP")
 
         self.plugins_progress = ttk.Progressbar(self.tab_plugins, mode="determinate", length=300)
         self.plugins_progress.pack(fill="x", padx=10, pady=(5, 0))
@@ -1802,7 +1798,7 @@ class ZI_Ops:
                     if matched and matched["page"]:
                         page_key = matched["page"].strip()
                         if page_key not in latest_cache:
-                            latest_cache[page_key] = self._fetch_latest_version_cached(page_key, self.plugins_log)
+                            latest_cache[page_key] = self._fetch_latest_version(page_key, self.plugins_log)
                         latest_version = self._normalize_version(latest_cache[page_key])
                         if latest_version != "?":
                             cmp = self._compare_versions(latest_version, version)
@@ -1971,37 +1967,23 @@ class ZI_Ops:
         self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
         self._apply_installed_plugins_sort()
 
-    def _fetch_latest_version_cached(self, page_url, log_widget=None):
-        key = page_url.strip()
-        cached = self._plugin_version_cache.get(key)
-        if cached and time.monotonic() < cached[0]:
-            return cached[1]
-        version = self._normalize_version(self._fetch_latest_version(key, log_widget))
-        self._plugin_version_cache[key] = (time.monotonic() + (300 if version != "?" else 60), version)
-        return version
-
     def _open_version_response(self, request, timeout=15):
-        """Space requests per host and honor rate limits for version checks and downloads."""
-        host = (urllib.parse.urlsplit(request.full_url).hostname or "").lower()
-        interval = 3.0 if host == "umod.org" or host.endswith(".umod.org") else 2.0
+        """Retry transient errors, honoring Retry-After and cancellation."""
         for attempt in range(1, 11):
             if self.stop_event.is_set():
-                raise RuntimeError("Операция остановлена")
-            with self._http_rate_lock:
-                now = time.monotonic()
-                if self._http_blocked_until.get(host, 0) > now:
-                    raise RuntimeError(f"{host}: запросы временно приостановлены после HTTP 429; повторите позже")
-                scheduled = max(now, self._http_next_request.get(host, 0))
-                self._http_next_request[host] = scheduled + interval
-            if self.stop_event.wait(max(0, scheduled - now)):
-                raise RuntimeError("Операция остановлена")
+                raise RuntimeError("Проверка остановлена")
+            host = urllib.parse.urlsplit(request.full_url).hostname or ""
+            if host == "umod.org" or host.endswith(".umod.org"):
+                delay = max(0, 1.0 - (time.monotonic() - getattr(self, "_umod_last_request", 0)))
+                if delay and self.stop_event.wait(delay):
+                    raise RuntimeError("Проверка остановлена")
+                self._umod_last_request = time.monotonic()
             try:
                 return urllib.request.urlopen(request, timeout=timeout)
             except urllib.error.HTTPError as exc:
-                if exc.code not in (408, 429, 500, 502, 503, 504):
-                    exc.close()
+                if attempt == 10 or exc.code not in (408, 429, 500, 502, 503, 504):
                     raise
-                delay = min(120, 5 * 2 ** min(attempt - 1, 5))
+                delay = min(30, 2 ** min(attempt, 5))
                 retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
                 try:
                     delay = max(delay, float(retry_after))
@@ -2011,23 +1993,14 @@ class ZI_Ops:
                         delay = max(delay, parsedate_to_datetime(retry_after).timestamp() - time.time())
                     except (ValueError, TypeError, OverflowError):
                         pass
-                code = exc.code
                 exc.close()
-                with self._http_rate_lock:
-                    self._http_next_request[host] = max(self._http_next_request.get(host, 0), time.monotonic() + delay)
-                    if code == 429 and attempt == 10:
-                        self._http_blocked_until[host] = time.monotonic() + max(300, delay)
-                if attempt == 10:
-                    raise
-                reason = "HTTP 429: слишком много запросов" if code == 429 else f"HTTP {code}"
             except (urllib.error.URLError, TimeoutError, OSError):
                 if attempt == 10:
                     raise
-                delay = min(120, 5 * 2 ** min(attempt - 1, 5))
-                reason = "временная ошибка сети"
-            self.log(self.plugins_log, f"{host}: {reason}. Попытка {attempt + 1}/10 через {int(delay)} сек.", "yellow")
+                delay = min(30, 2 ** min(attempt, 5))
+            self.log(self.plugins_log, f"Повтор запроса версии {host}: попытка {attempt + 1}/10 через {int(delay)} сек.", "yellow")
             if self.stop_event.wait(delay):
-                raise RuntimeError("Операция остановлена")
+                raise RuntimeError("Проверка остановлена")
 
     @staticmethod
     def _extract_html_version(source, page_url=""):
@@ -2317,8 +2290,8 @@ class ZI_Ops:
                 return
             self._running = True
 
-        self.stop_event.clear()
         rows = []
+        skipped_custom = []
         for row in self.plugin_rows:
             name = row["name"].get().strip() or "plugin"
             url = row["url"].get().strip()
@@ -2330,17 +2303,19 @@ class ZI_Ops:
                 url_filename = f"{name}.cs"
             remote_name = self._remote_basename(remote) if remote and not remote.endswith("/") else url_filename
 
-            is_custom = self._is_custom_plugin(name, remote_name, url_filename)
+            if self._is_custom_plugin(name, remote_name, url_filename):
+                skipped_custom.append(name)
+                continue
 
             rows.append({
                 "name": name,
                 "url": url,
                 "remote": remote,
-                "page": row["page"].get().strip(),
-                "custom": is_custom,
             })
         rows = [r for r in rows if r["url"]]
         if not rows:
+            if skipped_custom:
+                self.log(self.plugins_log, "🛡️ Кастомные плагины пропущены: " + ", ".join(skipped_custom), "yellow")
             with self.running_lock: self._running = False
             self.log(self.plugins_log, "Список пуст или все URL пустые.", "yellow")
             return
@@ -2350,6 +2325,8 @@ class ZI_Ops:
         self.plugins_log.config(state="normal")
         self.plugins_log.delete("1.0", "end")
         self.plugins_log.config(state="disabled")
+        if skipped_custom:
+            self.log(self.plugins_log, "🛡️ Кастомные плагины пропущены: " + ", ".join(skipped_custom), "yellow")
         base = self.base_var.get().strip()
         ftp_cfg = self._snapshot_ftp_config()
         threading.Thread(target=self._update_plugins_worker, args=(rows, base, ftp_cfg), daemon=True, name="plugin-update-worker").start()
@@ -2357,89 +2334,55 @@ class ZI_Ops:
     def _update_plugins_worker(self, rows, base, ftp_cfg):
         ftp = None
         temp_dir = tempfile.mkdtemp(prefix="ziops_plugins_")
-        updated, saved_custom, skipped, failed = 0, 0, 0, 0
         try:
             ftp = self.ftp_connect(self.plugins_log, ftp_cfg)
             if not ftp:
                 return
-            ftp_root = ftp.pwd()
             total = len(rows)
+
             for i, row in enumerate(rows, 1):
-                if self.stop_event.is_set():
-                    break
                 name, url, remote = row["name"], row["url"], row["remote"]
+                # Имя временного файла может иметь служебный префикс, но он НИКОГДА
+                # не должен попадать в имя плагина на Rust-сервере.
                 url_filename = os.path.basename(urllib.parse.urlparse(url).path)
                 if not url_filename.lower().endswith(".cs"):
                     url_filename = f"{name}.cs"
                 plugin_filename = re.sub(r'[^A-Za-z0-9_.-]', '_', url_filename) or f"{name}.cs"
-                if not remote:
-                    remote = f"oxide/plugins/{plugin_filename}"
-                elif remote.endswith("/"):
-                    remote += plugin_filename
-                remote_path = self._remote_path(base, remote)
-                if not posixpath.isabs(remote_path):
-                    remote_path = posixpath.normpath(posixpath.join(ftp_root, remote_path))
                 local_path = os.path.join(temp_dir, f"{i}_{plugin_filename}")
                 try:
-                    page = row.get("page", "").strip()
-                    if not page:
-                        skipped += 1
-                        self.log(self.plugins_log, f"⏭ {name}: нет страницы версии — обновление пропущено.", "yellow")
-                        continue
-                    self.log(self.plugins_log, f"[{i}/{total}] Проверка установленной версии {name}...", "cyan")
-                    folder = posixpath.dirname(remote_path) or "."
-                    filename = posixpath.basename(remote_path)
-                    ftp.cwd(folder)
-                    if not self._ftp_download_with_retry(ftp, folder, filename, local_path, self.plugins_log, ftp_cfg):
-                        raise RuntimeError("Не удалось прочитать установленный плагин; замена отменена")
-                    ftp = getattr(self, "_check_worker_ftp", ftp)
-                    with open(local_path, "r", encoding="utf-8", errors="ignore") as current:
-                        installed_name, _, installed_version = self._parse_plugin_info(current.read(), filename)
-                    is_custom = row.get("custom", False) or self._is_custom_plugin(name, filename, installed_name)
-                    latest = self._fetch_latest_version_cached(page, self.plugins_log)
-                    comparison = self._compare_versions(latest, installed_version)
-                    if comparison is None or comparison <= 0:
-                        skipped += 1
-                        reason = "версия не определена" if comparison is None else ("актуально" if comparison == 0 else "на сервере версия новее")
-                        self.log(self.plugins_log, f"⏭ {name}: {reason} ({installed_version} / {latest}).", "yellow" if comparison is None else "green")
-                        continue
-                    self.log(self.plugins_log, f"Скачивание {name}: {installed_version} → {latest}", "cyan")
-                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.2.0", "Accept": "text/plain,application/octet-stream,*/*"})
-                    with self._open_version_response(req, timeout=45) as resp:
+                    self.log(self.plugins_log, f"[{i}/{total}] Скачивание {name}...", "cyan")
+                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.0", "Accept": "text/plain,application/octet-stream,*/*"})
+                    with urllib.request.urlopen(req, timeout=45) as resp:
                         data = resp.read()
-                    if not data or re.search(br"<(?:!doctype\s+html|html|body)\b", data[:4096], re.I):
-                        raise ValueError("Вместо .cs получен пустой ответ или HTML")
-                    _, _, downloaded_version = self._parse_plugin_info(data.decode("utf-8-sig", errors="ignore"), filename)
-                    actual_comparison = self._compare_versions(downloaded_version, installed_version)
-                    if actual_comparison is None or actual_comparison <= 0:
-                        skipped += 1
-                        self.log(self.plugins_log, f"⏭ {name}: скачанный файл не содержит подтверждённой новой версии ({downloaded_version}).", "yellow")
-                        continue
-                    if self.stop_event.is_set():
-                        break
-                    with open(local_path, "wb") as downloaded:
-                        downloaded.write(data)
-                    if is_custom:
-                        saved_path = self._save_custom_plugin(filename, downloaded_version, data)
-                        saved_custom += 1
-                        self.log(self.plugins_log, f"🛡️ {name}: новая версия для патча сохранена → {saved_path}. Файл на сервере не изменён.", "green")
-                    else:
-                        with open(local_path, "rb") as downloaded:
-                            ftp.storbinary(f"STOR {remote_path}", downloaded)
-                        updated += 1
-                        self.log(self.plugins_log, f"✅ {name}: загружена версия {downloaded_version} → {remote_path}", "green")
-                except Exception as exc:
-                    failed += 1
-                    self.log(self.plugins_log, f"❌ {name}: {exc}. Файл не обновлён.", "red")
+                    if not data:
+                        raise ValueError("Пустой ответ.")
+                    if re.search(br"<(?:!doctype\s+html|html|body)\b", data[:4096], re.I):
+                        raise ValueError("Сервер вернул HTML вместо .cs файла.")
+                    with open(local_path, "wb") as f:
+                        f.write(data)
+                    self.log(self.plugins_log, f"  ✅ Скачано: {len(data):,} bytes", "green")
+
+                    if not remote:
+                        remote = f"oxide/plugins/{plugin_filename}"
+                    elif remote.endswith("/"):
+                        remote = remote + plugin_filename
+                    remote_path = self._remote_path(base, remote)
+                    with open(local_path, "rb") as f:
+                        ftp.storbinary(f"STOR {remote_path}", f)
+                    self.log(self.plugins_log, f"  ✅ Загружено: {remote_path}", "green")
+
+                except Exception as e:
+                    self.log(self.plugins_log, f"  ❌ {name}: {e}", "red")
                 finally:
-                    ftp = getattr(self, "_check_worker_ftp", ftp)
                     try: os.remove(local_path)
                     except OSError: pass
-                    pct = i / max(total, 1) * 100
-                    self._set_progress(self.plugins_progress, self.plugins_status_var, pct, f"{int(pct)}%")
-            self.log(self.plugins_log, f"Обновлено на сервере: {updated}; сохранено в Custom: {saved_custom}; пропущено: {skipped}; ошибок: {failed}.", "yellow" if failed else "green")
-        except Exception as exc:
-            self.log(self.plugins_log, f"❌ Ошибка обновления: {exc}", "red")
+
+                pct = i / total * 100
+                self._set_progress(self.plugins_progress, self.plugins_status_var, pct, f"{int(pct)}%")
+
+            self.log(self.plugins_log, "\n✅ Обновление завершено.", "green")
+        except Exception as e:
+            self.log(self.plugins_log, f"❌ Ошибка обновления: {e}", "red")
         finally:
             try: ftp.quit() if ftp else None
             except Exception:
@@ -2447,32 +2390,7 @@ class ZI_Ops:
                 except Exception: pass
             try: os.rmdir(temp_dir)
             except OSError: pass
-            self.__dict__.pop("_check_worker_ftp", None)
             self.root.after(0, self._plugins_done)
-
-    def _save_custom_plugin(self, filename, version, data):
-        folder = os.path.join(self.script_dir, "Custom")
-        os.makedirs(folder, exist_ok=True)
-        filename = self._remote_basename(filename)
-        filename = re.sub(r'[^A-Za-z0-9_.-]', '_', filename)
-        if not filename or filename in (".", ".."):
-            raise ValueError("Недопустимое имя кастомного плагина")
-        stem, extension = os.path.splitext(filename)
-        version = re.sub(r'[^A-Za-z0-9_.-]', '_', version)
-        index = 0
-        while True:
-            suffix = "" if index == 0 else f"_v{version}" + (f"_{index}" if index > 1 else "")
-            path = os.path.join(folder, stem + suffix + extension)
-            try:
-                with open(path, "xb") as output:
-                    output.write(data)
-                return path
-            except FileExistsError:
-                with open(path, "rb") as existing:
-                    if existing.read() == data:
-                        return path
-                # Preserve a downloaded original or a patch the user has started editing.
-                index += 1
 
     def _plugins_done(self):
         with self.running_lock:
