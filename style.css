@@ -14,3 +14,6 @@
 @media(max-width:760px){.hero{grid-template-columns:minmax(0,1fr)}.app-screenshot{max-width:440px!important;justify-self:center!important}}
 
 .plans-note{color:var(--muted);font-size:12px;margin:20px 0 0}@media(max-width:760px){.navigation nav{flex-wrap:wrap;justify-content:flex-start;gap:12px 18px}.navigation nav .nav-download{margin-left:auto}}
+
+@media(min-width:1001px){.hero{grid-template-columns:minmax(0,1fr) minmax(0,1.04fr);gap:40px}.app-screenshot{max-width:560px}}
+.notes{box-sizing:border-box}.notes summary::before{transition:transform .26s cubic-bezier(.22,1,.36,1)}

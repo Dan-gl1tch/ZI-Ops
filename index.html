@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1e1e2e">
   <meta name="description" content="ZI-Ops — управление сервером Rust: вайп, судная ночь, RCON, Query и обновление плагинов. Скачать EXE для Windows.">
   <title>ZI-Ops — управление сервером Rust</title>
-  <link rel="stylesheet" href="style.css?v=20261004-4">
+  <link rel="stylesheet" href="style.css?v=20261004-5">
 </head>
 <body>
   <a class="skip" href="#main">Перейти к содержимому</a>
@@ -28,7 +28,7 @@
         <div class="actions"><a class="button primary" data-download href="https://github.com/Dan-gl1tch/ZI-Ops/releases/download/ver-1_6_2_0/ZI-Ops.exe">Скачать для Windows <span aria-hidden="true">↓</span></a><a class="button secondary" href="#about">Что умеет программа <span aria-hidden="true">↗</span></a></div>
         <p class="download-meta">Версия <strong data-version>1.6.2.0</strong><span>·</span> EXE <span>·</span> Бесплатно</p>
       </div>
-      <figure class="app-screenshot" style="margin:0;min-width:0;width:100%;max-width:500px;justify-self:end">
+      <figure class="app-screenshot" style="margin:0;min-width:0;width:100%;max-width:560px;justify-self:end">
         <img src="zi-ops-plugins.png" width="1052" height="932" style="display:block;width:100%;max-width:100%;height:auto" alt="Интерфейс ZI-Ops 1.6.2.0: вкладка Плагины" fetchpriority="high">
         <figcaption>ZI-Ops 1.6.2.0 · Вкладка «Плагины»</figcaption>
       </figure>
@@ -136,6 +136,25 @@
     }
     return container;
   }
+  function animateNotes(details) {
+    const summary = details.querySelector('summary');
+    let animation = null, expanded = false;
+    summary.addEventListener('click', event => {
+      event.preventDefault();
+      expanded = !expanded;
+      const from = details.getBoundingClientRect().height;
+      if (animation) animation.cancel();
+      details.style.height = '';
+      details.style.overflow = 'hidden';
+      details.open = true;
+      const to = expanded ? details.getBoundingClientRect().height : summary.getBoundingClientRect().height;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof details.animate !== 'function') {
+        details.open = expanded; details.style.overflow = ''; return;
+      }
+      animation = details.animate([{height: from + 'px'}, {height: to + 'px'}], {duration:260, easing:'cubic-bezier(.22,1,.36,1)'});
+      animation.onfinish = () => { details.open = expanded; details.style.height = ''; details.style.overflow = ''; animation = null; };
+    });
+  }
   function render() {
     const visible = releases.filter(r => !r.draft).sort(compareReleases);
     const latest = visible.find(r => !r.prerelease && exeOf(r));
@@ -154,7 +173,7 @@
       const date = new Date(release.published_at);
       if (!Number.isNaN(date.getTime())) { const time = make('time', 'release-date', date.toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'})); time.dateTime = date.toISOString(); card.append(time); }
       const body = (release.body || '').trim();
-      if (body) { const details = make('details', 'notes'); details.append(make('summary', '', 'Изменения в версии'), formatNotes(body)); card.append(details); }
+      if (body) { const details = make('details', 'notes'); details.append(make('summary', '', 'Изменения в версии'), formatNotes(body)); animateNotes(details); card.append(details); }
       else card.append(make('p', '', 'Описание этого выпуска не добавлено.'));
       const exe = exeOf(release);
       if (exe) { const link = make('a', 'button ' + (release === latest ? 'primary' : 'secondary'), 'Скачать EXE ↓'); link.href = exe.browser_download_url; card.append(link); }
