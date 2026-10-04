@@ -12,3 +12,5 @@
 /* Компактное статичное изображение; minmax не даёт картинке расширять сетку. */
 .hero{grid-template-columns:minmax(0,1.02fr) minmax(0,1fr)}.hero-copy{min-width:0}.app-screenshot{width:100%;max-width:500px;justify-self:end}.app-screenshot img{width:100%;max-width:100%;height:auto;border:1px solid #53556f;border-radius:7px;box-shadow:0 18px 40px #10101b44}.app-screenshot figcaption{font-size:10px;margin-top:9px}
 @media(max-width:760px){.hero{grid-template-columns:minmax(0,1fr)}.app-screenshot{max-width:440px!important;justify-self:center!important}}
+
+.plans-note{color:var(--muted);font-size:12px;margin:20px 0 0}@media(max-width:760px){.navigation nav{flex-wrap:wrap;justify-content:flex-start;gap:12px 18px}.navigation nav .nav-download{margin-left:auto}}
