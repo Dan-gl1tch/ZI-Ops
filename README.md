@@ -2,7 +2,7 @@
 
 ![ZI-Ops](https://i.postimg.cc/HsnTF6Zm/Chat-GPT-Image-19-sent-2026-g-12-54-06.png)
 
-Текущая версия: **1.6.3.0**.
+Текущая версия: **1.6.4.0**.
 
 ZI-Ops — программа для управления сервером Rust с Windows. В одном окне можно провести вайп, переключить файлы для судной ночи, отправить команду через RCON и проверить версии плагинов.
 
@@ -49,14 +49,14 @@ ZI-Ops — программа для управления сервером Rust 
 Нужен Python с Tkinter. Установите пакет для RCON и запустите программу:
 
 ```bash
-python -m pip install websocket-client
+python -m pip install websocket-client customtkinter==6.0.0
 python zi_ops.py
 ```
 
 Для сборки EXE используется `build.bat`:
 
 ```bash
-python -m pip install pyinstaller websocket-client
+python -m pip install pyinstaller websocket-client customtkinter==6.0.0
 build.bat
 ```
 
@@ -86,3 +86,6 @@ build.bat
 [новости и обновления](https://t.me/DanStudios47) · [DonationAlerts](https://www.donationalerts.com/r/danilmine_)
 
 Программа бесплатная. Если она помогает в работе с сервером, можно поддержать разработку через DonationAlerts. Это помогает продолжать работу над программой и выпускать обновления.
+
+
+Интерфейс построен на CustomTkinter. При сборке через `build.bat` ресурсы библиотеки и иконка включаются в EXE. Настройки остаются в `config.json`; перенос из версии 1.6.3.0 не требует конвертации.

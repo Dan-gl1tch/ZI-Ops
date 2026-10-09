@@ -13,12 +13,11 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.6.4.0
-#    nuitka-project: --product-version=1.6.4.0
+#    nuitka-project: --file-version=1.6.3.0
+#    nuitka-project: --product-version=1.6.3.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
-import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import ftplib
@@ -151,7 +150,7 @@ def detect_background_capacity():
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.6.4.0"
+APP_VERSION = "1.6.3.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -595,91 +594,6 @@ class RustRCON:
                 except Exception: pass
 
 
-
-
-class ModernWindow(ctk.CTk):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.withdraw()
-
-    def _windows_set_titlebar_color(self, color_mode):
-        # Change the Windows title bar without CTk's withdraw/deiconify cycle.
-        if sys.platform.startswith("win"):
-            try:
-                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
-                value = ctypes.c_int(1)
-                for attribute in (20, 19):
-                    if ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                        hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value)) == 0:
-                        break
-            except (AttributeError, tk.TclError, OSError):
-                pass
-
-class ModernTabs(ctk.CTkTabview):
-    _button_height = 44
-    """Keep the existing Query visibility check while using CTk tabs."""
-    def bind(self, sequence=None, func=None, add=None):
-        return tk.Misc.bind(self, sequence, func, add)
-
-    def select(self, tab=None):
-        if tab is not None:
-            for name in self._tab_dict:
-                if str(self.tab(name)) == str(tab) or name == tab:
-                    self.set(name)
-                    self.event_generate("<<NotebookTabChanged>>")
-                    break
-        return str(self.tab(self.get()))
-
-
-
-class ModernScrollbar(ctk.CTkScrollbar):
-    def __init__(self, master, orient="vertical", **kwargs):
-        super().__init__(master, orientation=orient, width=14, height=24,
-                         corner_radius=3, border_spacing=2,
-                         fg_color=("#e6e9ef", "#191925"),
-                         button_color=("#9ca0b0", "#585b70"),
-                         button_hover_color=("#7287fd", "#89b4fa"), **kwargs)
-
-class ModernButton(ctk.CTkButton):
-    """Translate existing semantic button styles and character widths."""
-    def __init__(self, master, **kwargs):
-        style = kwargs.pop("style", "TButton")
-        width = kwargs.pop("width", None)
-        text = kwargs.get("text", "")
-        kwargs.setdefault("width", max(32, width * 9) if width else max(90, len(text) * 8 + 24))
-        kwargs.setdefault("height", 32)
-        kwargs.setdefault("corner_radius", 3)
-        kwargs.setdefault("font", ("Segoe UI", 13, "bold"))
-        palette = {
-            "Accent.TButton": ("#7287fd", "#89b4fa"),
-            "Danger.TButton": ("#d20f39", "#f38ba8"),
-            "Success.TButton": ("#40a02b", "#a6e3a1"),
-            "Warn.TButton": ("#df8e1d", "#f9e2af"),
-            "Purple.TButton": ("#8839ef", "#cba6f7"),
-        }
-        kwargs.setdefault("fg_color", palette.get(style, ("#ccd0da", "#313244")))
-        kwargs.setdefault("hover_color", ("#bcc0cc", "#45475a"))
-        kwargs.setdefault("text_color", ("#eff1f5", "#1e1e2e") if style in palette else ("#4c4f69", "#cdd6f4"))
-        super().__init__(master, **kwargs)
-
-
-def ModernPanel(master, text="", padding=8, **kwargs):
-    """A rounded section with a heading and a standard Tk content frame."""
-    outer = ctk.CTkFrame(master, corner_radius=6, fg_color=("#e6e9ef", "#191925"),
-                         border_width=2, border_color=("#9ca0b0", "#585b70"), **kwargs)
-    outer.grid_columnconfigure(0, weight=1)
-    outer.grid_rowconfigure(1, weight=1)
-    ctk.CTkLabel(outer, text=text.strip(), anchor="w", height=22,
-                 font=("Segoe UI", 13, "bold"), text_color=("#1e66f5", "#89b4fa")).grid(
-                     row=0, column=0, sticky="ew", padx=10, pady=(6, 2))
-    content = ttk.Frame(outer, style="Panel.TFrame")
-    content.grid(row=1, column=0, sticky="nsew", padx=padding, pady=(0, padding))
-    content.pack = outer.pack
-    content.place = outer.place
-    content.pack_forget = outer.pack_forget
-    content._section_outer = outer
-    return content
-
 class ZI_Ops:
     # Встроенная иконка 64x64 GIF (base64) — буквы "ZI"
     ICON_B64 = (
@@ -742,7 +656,7 @@ class ZI_Ops:
         self.root.title(APP_NAME)
         self.root.geometry("1050x900")
         self.root.minsize(950, 750)
-        self.root.configure(fg_color=("#eff1f5", "#1e1e2e"))
+        self.root.configure(bg=_theme_color("#1e1e2e"))
         self.style = ttk.Style()
         self.style.theme_use("clam")
         self.configure_styles()
@@ -887,11 +801,6 @@ class ZI_Ops:
     def configure_styles(self):
         bg, fg, accent, surface = _theme_color("#1e1e2e"), _theme_color("#cdd6f4"), _theme_color("#89b4fa"), _theme_color("#313244")
         red, green, yellow, mauve = _theme_color("#f38ba8"), _theme_color("#a6e3a1"), _theme_color("#f9e2af"), _theme_color("#cba6f7")
-        panel_bg = "#e6e9ef" if self.theme_mode == "light" else "#191925"
-        self.style.configure("Panel.TFrame", background=panel_bg)
-        self.style.configure("Panel.TLabel", background=panel_bg, foreground=fg, font=("Segoe UI", 10))
-        self.style.configure("Panel.TCheckbutton", background=panel_bg, foreground=fg)
-        self.style.map("Panel.TCheckbutton", background=[("active", panel_bg)])
         self.style.configure("TFrame", background=bg)
         self.style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
         self.style.configure("TButton", background=surface, foreground=fg, font=("Segoe UI", 10, "bold"), padding=6)
@@ -900,11 +809,10 @@ class ZI_Ops:
         self.style.configure("Success.TButton", background=green, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
         self.style.configure("Warn.TButton", background=yellow, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
         self.style.configure("Purple.TButton", background=mauve, foreground=_theme_color("#1e1e2e"), font=("Segoe UI", 10, "bold"), padding=6)
-        self.style.configure("TEntry", fieldbackground=surface, foreground=fg, insertcolor=fg, padding=4, borderwidth=1, relief="solid", bordercolor=_theme_color("#bac2de"), lightcolor=_theme_color("#bac2de"), darkcolor=_theme_color("#bac2de"))
-        self.style.map("TEntry", bordercolor=[("focus", accent)])
+        self.style.configure("TEntry", fieldbackground=surface, foreground=fg, insertcolor=fg)
         self.style.configure("TCheckbutton", background=bg, foreground=fg)
         self.style.configure("Horizontal.TProgressbar", background=accent, troughcolor=surface)
-        self.style.configure("TLabelframe", background=bg, foreground=fg, relief="flat", borderwidth=0)
+        self.style.configure("TLabelframe", background=bg, foreground=fg)
         self.style.configure("TLabelframe.Label", background=bg, foreground=accent, font=("Segoe UI", 10, "bold"))
         # Treeview dark theme
         self.style.configure("Treeview",
@@ -912,7 +820,7 @@ class ZI_Ops:
                              foreground=_theme_color("#cdd6f4"),
                              fieldbackground=_theme_color("#313244"),
                              font=("Segoe UI", 9),
-                             rowheight=26)
+                             rowheight=22)
         self.style.configure("Treeview.Heading",
                              background=_theme_color("#45475a"),
                              foreground=_theme_color("#cdd6f4"),
@@ -941,13 +849,9 @@ class ZI_Ops:
         self.save_config(silent=True)
 
     def apply_theme(self, mode):
-        self._apply_theme_colors(mode)
-
-    def _apply_theme_colors(self, mode):
         global _ACTIVE_THEME
         self.theme_mode = mode if mode in ("dark", "light") else "dark"
         _ACTIVE_THEME = self.theme_mode
-        ctk.set_appearance_mode(self.theme_mode)
         self.configure_styles()
         inverse = {light: dark for dark, light in _LIGHT_COLORS.items()}
 
@@ -957,26 +861,14 @@ class ZI_Ops:
             return _theme_color(dark)
 
         def visit(widget):
-            if isinstance(widget, (ctk.CTk, ctk.CTkBaseClass)):
-                if widget._get_appearance_mode() != self.theme_mode:
-                    widget._set_appearance_mode(self.theme_mode)
-                if isinstance(widget, (ctk.CTkButton, ctk.CTkLabel, ctk.CTkScrollbar)):
-                    return
-                for child in widget.winfo_children():
-                    if isinstance(child, (ctk.CTkBaseClass, ttk.Widget)):
-                        visit(child)
-                return
             options = widget.keys()
-            changes = {}
             for option in ("background", "foreground", "insertbackground", "selectbackground",
                            "selectforeground", "highlightbackground", "highlightcolor",
                            "activebackground", "activeforeground", "disabledforeground"):
                 if option in options:
                     value = widget.cget(option)
                     if str(value).lower() in _LIGHT_COLORS or str(value).lower() in inverse:
-                        changes[option] = recolor(value)
-            if changes:
-                widget.configure(**changes)
+                        widget.configure(**{option: recolor(value)})
             if isinstance(widget, tk.Text):
                 for tag in widget.tag_names():
                     for option in ("foreground", "background"):
@@ -996,25 +888,20 @@ class ZI_Ops:
                 visit(child)
 
         visit(self.root)
-        if hasattr(self, "notebook"):
-            self._style_active_tab()
         if hasattr(self, "theme_button"):
             self.theme_button.configure(text="Тема: светлая" if self.theme_mode == "light" else "Тема: тёмная")
 
 
     def _set_icon(self):
-        # CTk schedules its default icon after startup; apply ours afterward too.
-        import base64
-        self._icon_ref = tk.PhotoImage(data=base64.b64decode(self.ICON_B64))
-        def apply_icon():
-            if not self._closing:
-                icon_path = os.path.join(getattr(sys, "_MEIPASS", self.script_dir), "ZI-Ops.ico")
-                if os.name == "nt" and os.path.isfile(icon_path):
-                    self.root.iconbitmap(icon_path)
-                else:
-                    self.root.iconphoto(True, self._icon_ref)
-        apply_icon()
-        self.root.after(350, apply_icon)
+        """Устанавливает иконку окна из встроенного base64 GIF (буквы ZI)."""
+        try:
+            import base64
+            icon_data = base64.b64decode(self.ICON_B64)
+            icon_img = tk.PhotoImage(data=icon_data)
+            self.root.iconphoto(True, icon_img)
+            self._icon_ref = icon_img  # держим ссылку, чтобы GC не съел
+        except Exception:
+            pass  # если не получилось — иконка по умолчанию
 
     # ===== ОБЩИЕ УТИЛИТЫ =====
     @staticmethod
@@ -1133,102 +1020,54 @@ class ZI_Ops:
                 if bounds is not None and current != bounds:
                     canvas.configure(scrollregion=bounds)
 
-    def _style_active_tab(self, event=None):
-        active = self.notebook.get()
-        for button in self.notebook._segmented_button._buttons_dict.values():
-            button.grid_configure(padx=3)
-        for name, button in self.notebook._segmented_button._buttons_dict.items():
-            selected = name == active
-            button.configure(
-                corner_radius=5, border_width=2,
-                border_color=("#4c4f69", "#cdd6f4") if selected else ("#9ca0b0", "#585b70"),
-                fg_color=("#eff1f5", "#1e1e2e") if selected else ("#ccd0da", "#313244"),
-                text_color=("#1e66f5", "#89b4fa") if selected else ("#4c4f69", "#cdd6f4"))
-
-    def _sync_wipe_notice_button(self, event=None):
-        if self.notebook.select() == str(self.tab_wipe):
-            self.wipe_notice_button.place(relx=1, x=-24, y=14, anchor="ne")
-        else:
-            self.wipe_notice_button.place_forget()
-
-    def _modern_tab_changed(self):
-        self._style_active_tab()
-        self.notebook.event_generate("<<NotebookTabChanged>>")
-
     def build_ui(self):
         ttk.Label(
             self.root,
             text=f"Версия {APP_VERSION}  •  Автор: {APP_AUTHOR}",
-            anchor="center", font=("Segoe UI", 10),
+            anchor="center",
         ).pack(side="bottom", fill="x", padx=10, pady=(0, 8))
-        self.notebook = ModernTabs(self.root, anchor="n", corner_radius=4, segmented_button_font=("Segoe UI", 12, "bold"),
-            fg_color=("#eff1f5", "#1e1e2e"),
-            segmented_button_selected_color=("#7287fd", "#476998"),
-            segmented_button_selected_hover_color=("#6175de", "#557eae"),
-            segmented_button_unselected_color=("#ccd0da", "#313244"),
-            segmented_button_unselected_hover_color=("#bcc0cc", "#45475a"),
-            text_color=("#4c4f69", "#cdd6f4"), command=self._modern_tab_changed)
-        self.notebook.pack(fill="both", expand=True, padx=14, pady=(4, 12))
-        self.notebook._segmented_button.configure(corner_radius=4, border_width=3, fg_color=("#eff1f5", "#1e1e2e"))
-        self.tab_wipe = self.notebook.add("🧹 Вайп")
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        self.tab_wipe = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_wipe, text="  🧹 Вайп  ")
         self.build_wipe_tab()
-        self.tab_judgment = self.notebook.add("🌑 Судная ночь")
+        self.tab_judgment = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_judgment, text="  🌑 Судная ночь  ")
         self.build_judgment_tab()
-        self.tab_rcon = self.notebook.add("🎮 RCON")
+        self.tab_rcon = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_rcon, text="  🎮 RCON  ")
         self.build_rcon_tab()
-        self.tab_plugins = self.notebook.add("📦 Плагины")
+        self.tab_plugins = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_plugins, text="  📦 Плагины  ")
         self.build_plugins_tab()
-        self.tab_settings = self.notebook.add("⚙️ Настройки")
+        self.tab_settings = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_settings, text="  ⚙️ Настройки  ")
         self.build_settings_tab()
-        self.tab_support = self.notebook.add("❤ Поддержать автора")
+        self.tab_support = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_support, text="  ❤ Поддержать автора  ")
         self.build_support_tab()
-        def style_sections(widget, inside=False):
-            if isinstance(widget, (ctk.CTkButton, ctk.CTkLabel)):
-                return
-            inside = inside or hasattr(widget, "_section_outer")
-            if inside:
-                for widget_type, style in ((ttk.Frame, "Panel.TFrame"), (ttk.Label, "Panel.TLabel"), (ttk.Checkbutton, "Panel.TCheckbutton")):
-                    if isinstance(widget, widget_type):
-                        widget.configure(style=style)
-                        break
-            for child in widget.winfo_children():
-                style_sections(child, inside)
-        style_sections(self.root)
-        self.notebook.bind("<<NotebookTabChanged>>", self._style_active_tab, add="+")
-        self._style_active_tab()
-        for tab_button in self.notebook._segmented_button._buttons_dict.values():
-            from tkinter.font import Font
-            tab_button.configure(width=Font(root=self.root, family="Segoe UI", size=-12, weight="bold").measure(tab_button.cget("text")) + 32, height=44)
-        self.root.bind_all("<MouseWheel>", self._plugin_list_wheel, add="+")
-        self.root.bind_all("<Button-4>", self._plugin_list_wheel, add="+")
-        self.root.bind_all("<Button-5>", self._plugin_list_wheel, add="+")
         self.root.bind_all("<Control-KeyPress>", self._layout_independent_shortcut, add="+")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def build_support_tab(self):
-        row = ttk.Frame(self.tab_support)
-        row.pack(fill="x", padx=10, pady=10)
-        row.columnconfigure(0, weight=1, uniform="support")
-        row.columnconfigure(1, weight=1, uniform="support")
-        card = ModernPanel(row, text="❤ Поддержка ZI-Ops", padding=20)
-        card._section_outer.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        ttk.Label(card, text="Поддержать разработку", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(4, 14))
-        ttk.Label(card, text="Ваша поддержка помогает развивать ZI-Ops,\nдобавлять возможности и исправлять ошибки.",
-                  justify="left", wraplength=400).pack(anchor="w", pady=(0, 20))
-        ModernButton(card, text="❤ Поддержать через DonationAlerts", height=40,
-                     style="Accent.TButton", command=self.open_donation_page).pack(anchor="w", pady=(0, 18))
-        ttk.Label(card, text="Поддержка добровольная.\nВсе функции доступны бесплатно.",
-                  justify="left", foreground=_theme_color("#a6adc8")).pack(anchor="w")
-        links = ModernPanel(row, text="Новости и сайт", padding=20)
-        links._section_outer.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        ttk.Label(links, text="Следите за ZI-Ops", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(4, 14))
-        ttk.Label(links, text="Новости и обновления — в канале DanStudios47.",
-                  wraplength=400).pack(anchor="w", pady=(0, 12))
-        ModernButton(links, text="Открыть Telegram-канал", command=self.open_updates_page).pack(anchor="w", pady=(0, 18))
-        ttk.Label(links, text="На сайте — загрузка программы и предыдущие версии.",
-                  wraplength=400).pack(anchor="w", pady=(0, 12))
-        ModernButton(links, text="Сайт ZI-Ops ↗", style="Accent.TButton",
-                     command=lambda: webbrowser.open("https://dan-gl1tch.github.io/ZI-Ops/", new=2)).pack(anchor="w")
+        panel = ttk.Frame(self.tab_support, padding=24)
+        panel.pack(fill="both", expand=True)
+        ttk.Label(panel, text="Поддержать разработку ZI-Ops",
+                  font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 12))
+        ttk.Label(panel, text="Если программа помогает тебе управлять сервером, можно поддержать её развитие.\n"
+                  "Спасибо за поддержку! Донат добровольный — все функции доступны бесплатно.",
+                  wraplength=720, justify="left").pack(anchor="w", pady=(0, 20))
+        ttk.Button(panel, text="❤ Поддержать через DonationAlerts",
+                   style="Accent.TButton", command=self.open_donation_page).pack(anchor="w", pady=(0, 8))
+        ttk.Label(panel, text="Пожертвования помогают продолжать развитие и поддержку программы: "
+                  "добавлять возможности, улучшать удобство и исправлять ошибки. "
+                  "Даже когда программа уже работает хорошо, ваша поддержка помогает "
+                  "не останавливаться на достигнутом.",
+                  wraplength=720, justify="left").pack(anchor="w", pady=(0, 8))
+        ttk.Label(panel, text="Страница пожертвования откроется в браузере.").pack(anchor="w")
+        ttk.Button(panel, text="Источник обновлений",
+                   command=self.open_updates_page).pack(anchor="w", pady=(20, 8))
+        ttk.Label(panel, text="Официальный Telegram-канал DanStudios47.").pack(anchor="w")
 
     def open_donation_page(self):
         try:
@@ -1266,14 +1105,14 @@ class ZI_Ops:
         header.pack(fill="x", pady=(0, 12))
         ttk.Label(header, text="Важное: карты и безопасность настроек",
                   font=("Segoe UI", 13, "bold")).pack(side="left")
-        close_button = ModernButton(header, text="Закрыть", command=self.hide_wipe_notice)
+        close_button = ttk.Button(header, text="Закрыть", command=self.hide_wipe_notice)
         close_button.pack(side="right", padx=(8, 0))
         body = ttk.Frame(panel)
         body.pack(fill="both", expand=True)
         text = tk.Text(body, wrap="word", bg=_theme_color("#313244"), fg=_theme_color("#cdd6f4"),
                        font=("Segoe UI", 11), relief="flat", padx=12, pady=12)
         text.pack(side="left", fill="both", expand=True)
-        scrollbar = ModernScrollbar(body, orient="vertical", command=text.yview)
+        scrollbar = ttk.Scrollbar(body, orient="vertical", command=text.yview)
         scrollbar.pack(side="right", fill="y")
         text.configure(yscrollcommand=scrollbar.set)
         text.tag_configure("title", font=("Segoe UI", 12, "bold"), foreground=_theme_color("#89dceb"))
@@ -1319,9 +1158,9 @@ class ZI_Ops:
         text.configure(state="disabled")
         links = ttk.Frame(panel)
         links.pack(fill="x", pady=(12, 0))
-        ModernButton(links, text="Открыть RustMaps",
+        ttk.Button(links, text="Открыть RustMaps",
                    command=lambda: webbrowser.open("https://rustmaps.com", new=2)).pack(side="left", padx=(0, 8))
-        ModernButton(links, text="Открыть Dashboard",
+        ttk.Button(links, text="Открыть Dashboard",
                    command=lambda: webbrowser.open("https://rustmaps.com/dashboard", new=2)).pack(side="left")
         close_button.focus_set()
 
@@ -1331,12 +1170,12 @@ class ZI_Ops:
             self.wipe_notice_panel = None
 
     def build_wipe_tab(self):
-        self.wipe_notice_button = ModernButton(self.root, text="⚠ Важное", command=self.show_wipe_notice)
-        self.wipe_notice_button.place(relx=1, x=-24, y=14, anchor="ne")
-        self.notebook.bind("<<NotebookTabChanged>>", self._sync_wipe_notice_button, add="+")
+        notice_bar = ttk.Frame(self.tab_wipe)
+        notice_bar.pack(fill="x", padx=10, pady=(8, 0))
+        ttk.Button(notice_bar, text="⚠ Важное", command=self.show_wipe_notice).pack(side="right")
         self.wipe_notice_panel = None
-        seed_frame = ModernPanel(self.tab_wipe, text=" 🗺️ Авто-вайп: Seed + Restart ", padding=10)
-        seed_frame.pack(fill="x", padx=10, pady=(10, 8))
+        seed_frame = ttk.LabelFrame(self.tab_wipe, text=" 🗺️ Авто-вайп: Seed + Restart ", padding=10)
+        seed_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         self.wipe_change_seed_var = tk.BooleanVar(value=False)
         cb_seed = ttk.Checkbutton(seed_frame, text="Сгенерировать новый seed и записать в server.cfg",
@@ -1351,10 +1190,10 @@ class ZI_Ops:
         cfg_frame = ttk.Frame(seed_frame)
         cfg_frame.grid(row=1, column=1, columnspan=4, sticky="ew", padx=4, pady=4)
         ttk.Entry(cfg_frame, textvariable=self.wipe_cfg_template_var, width=45).pack(side="left", fill="x", expand=True, padx=(0, 4))
-        btn_br = ModernButton(cfg_frame, text="Обзор...", command=lambda: self.browse_file(self.wipe_cfg_template_var))
+        btn_br = ttk.Button(cfg_frame, text="Обзор...", command=lambda: self.browse_file(self.wipe_cfg_template_var))
         btn_br.pack(side="left", padx=(0, 4))
         Tooltip(btn_br, "Выбрать локальный файл server.cfg с ПК")
-        btn_pr = ModernButton(cfg_frame, text="🧪 Проверить", command=self.preview_cfg_template)
+        btn_pr = ttk.Button(cfg_frame, text="🧪 Проверить", command=self.preview_cfg_template)
         btn_pr.pack(side="left")
         Tooltip(btn_pr, "Предпросмотр содержимого server.cfg без изменений")
 
@@ -1373,10 +1212,10 @@ class ZI_Ops:
         self.wipe_seed_entry = ttk.Entry(seed_frame, textvariable=self.wipe_seed_var, width=20)
         self.wipe_seed_entry.grid(row=3, column=2, sticky="w", padx=4)
         Tooltip(self.wipe_seed_entry, "Введи seed вручную или сгенерируй случайный / через RustMaps API")
-        btn_gen = ModernButton(seed_frame, text="1 Сгенерировать seed", command=self.generate_random_seed)
+        btn_gen = ttk.Button(seed_frame, text="1 Сгенерировать seed", command=self.generate_random_seed)
         btn_gen.grid(row=3, column=3, sticky="w", padx=4)
         Tooltip(btn_gen, "Шаг 1: Сгенерировать случайный seed прямо в программе (без интернета)")
-        btn_rust = ModernButton(seed_frame, text="2 Генерировать на RustMaps",
+        btn_rust = ttk.Button(seed_frame, text="2 Генерировать на RustMaps",
                    command=lambda: self.generate_via_rustmaps(self.wipe_seed_var, self.wipe_worldsize_var, self.wipe_log))
         btn_rust.grid(row=3, column=4, sticky="w", padx=4)
         Tooltip(btn_rust, "Шаг 2: Сгенерировать карту на rustmaps.com по текущему seed. Может занять 3–15 минут или дольше. Прогресс смотри в Dashboard; не нажимай повторно!")
@@ -1415,7 +1254,7 @@ class ZI_Ops:
         Tooltip(ent_msg, "Текст объявления для игроков перед рестартом")
         seed_frame.columnconfigure(4, weight=1)
 
-        files_frame = ModernPanel(self.tab_wipe, text=" Файлы для удаления ", padding=6)
+        files_frame = ttk.LabelFrame(self.tab_wipe, text=" Файлы для удаления ", padding=6)
         files_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(files_frame, "Список файлов, которые будут удалены с сервера через FTP при вайпе. Указывай пути относительно базового пути")
         files_frame.rowconfigure(0, weight=1); files_frame.columnconfigure(0, weight=1)
@@ -1423,21 +1262,21 @@ class ZI_Ops:
                                        insertbackground=_theme_color("#cdd6f4"), font=("Consolas", 9), relief="flat", bd=2)
         self.wipe_files_text.grid(row=0, column=0, sticky="nsew")
         for f in self.DEFAULT_WIPE_FILES: self.wipe_files_text.insert("end", f + "\n")
-        fs = ModernScrollbar(files_frame, orient="vertical", command=self.wipe_files_text.yview)
+        fs = ttk.Scrollbar(files_frame, orient="vertical", command=self.wipe_files_text.yview)
         fs.grid(row=0, column=1, sticky="ns")
         self.wipe_files_text.config(yscrollcommand=fs.set)
         ff = ttk.Frame(files_frame); ff.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
-        btn_lf = ModernButton(ff, text="Загрузить", command=lambda: self.load_text(self.wipe_files_text))
+        btn_lf = ttk.Button(ff, text="Загрузить", command=lambda: self.load_text(self.wipe_files_text))
         btn_lf.pack(side="left", padx=2)
         Tooltip(btn_lf, "Загрузить список файлов из .txt файла")
-        btn_sf = ModernButton(ff, text="Сохранить", command=lambda: self.save_text(self.wipe_files_text))
+        btn_sf = ttk.Button(ff, text="Сохранить", command=lambda: self.save_text(self.wipe_files_text))
         btn_sf.pack(side="left", padx=2)
         Tooltip(btn_sf, "Сохранить список файлов в .txt файл")
-        btn_rf = ModernButton(ff, text="Сбросить", command=self.reset_wipe_files)
+        btn_rf = ttk.Button(ff, text="Сбросить", command=self.reset_wipe_files)
         btn_rf.pack(side="left", padx=2)
         Tooltip(btn_rf, "Вернуть стандартный список файлов для удаления")
 
-        folders_frame = ModernPanel(self.tab_wipe, text=" Папки для очистки ", padding=6)
+        folders_frame = ttk.LabelFrame(self.tab_wipe, text=" Папки для очистки ", padding=6)
         folders_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(folders_frame, "Список папок, содержимое которых будет полностью удалено с сервера (включая подпапки и файлы)")
         folders_frame.rowconfigure(0, weight=1); folders_frame.columnconfigure(0, weight=1)
@@ -1445,25 +1284,25 @@ class ZI_Ops:
                                          insertbackground=_theme_color("#cdd6f4"), font=("Consolas", 9), relief="flat", bd=2)
         self.wipe_folders_text.grid(row=0, column=0, sticky="nsew")
         for f in self.DEFAULT_WIPE_FOLDERS: self.wipe_folders_text.insert("end", f + "\n")
-        fs2 = ModernScrollbar(folders_frame, orient="vertical", command=self.wipe_folders_text.yview)
+        fs2 = ttk.Scrollbar(folders_frame, orient="vertical", command=self.wipe_folders_text.yview)
         fs2.grid(row=0, column=1, sticky="ns")
         self.wipe_folders_text.config(yscrollcommand=fs2.set)
         ff2 = ttk.Frame(folders_frame); ff2.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
-        btn_lfo = ModernButton(ff2, text="Загрузить", command=lambda: self.load_text(self.wipe_folders_text))
+        btn_lfo = ttk.Button(ff2, text="Загрузить", command=lambda: self.load_text(self.wipe_folders_text))
         btn_lfo.pack(side="left", padx=2)
         Tooltip(btn_lfo, "Загрузить список папок из .txt файла")
-        btn_sfo = ModernButton(ff2, text="Сохранить", command=lambda: self.save_text(self.wipe_folders_text))
+        btn_sfo = ttk.Button(ff2, text="Сохранить", command=lambda: self.save_text(self.wipe_folders_text))
         btn_sfo.pack(side="left", padx=2)
         Tooltip(btn_sfo, "Сохранить список папок в .txt файл")
-        btn_rfo = ModernButton(ff2, text="Сбросить", command=self.reset_wipe_folders)
+        btn_rfo = ttk.Button(ff2, text="Сбросить", command=self.reset_wipe_folders)
         btn_rfo.pack(side="left", padx=2)
         Tooltip(btn_rfo, "Вернуть стандартный список папок для очистки")
 
-        ctrl = ttk.Frame(self.tab_wipe); ctrl.pack(fill="x", padx=10, pady=(8, 8))
-        self.wipe_start_btn = ModernButton(ctrl, text="▶ Запустить вайп", style="Accent.TButton", command=self.start_wipe)
+        ctrl = ttk.Frame(self.tab_wipe); ctrl.pack(fill="x", padx=10, pady=(5, 5))
+        self.wipe_start_btn = ttk.Button(ctrl, text="▶ Запустить вайп", style="Accent.TButton", command=self.start_wipe)
         self.wipe_start_btn.pack(side="left", padx=(0, 8))
         Tooltip(self.wipe_start_btn, "Начинает вайп: удаляет файлы/папки → обновляет seed → отправляет рестарт (если включено)")
-        self.wipe_stop_btn = ModernButton(ctrl, text="⏹ Остановить", style="Danger.TButton", command=self.request_stop, state="disabled")
+        self.wipe_stop_btn = ttk.Button(ctrl, text="⏹ Остановить", style="Danger.TButton", command=self.request_stop, state="disabled")
         self.wipe_stop_btn.pack(side="left", padx=(0, 8))
         Tooltip(self.wipe_stop_btn, "Остановить текущий процесс вайпа (после завершения текущей операции)")
         self.wipe_progress = ttk.Progressbar(ctrl, mode="determinate", length=200)
@@ -1471,13 +1310,13 @@ class ZI_Ops:
         self.wipe_status_var = tk.StringVar(value="Готов")
         ttk.Label(ctrl, textvariable=self.wipe_status_var).pack(side="right", padx=8)
 
-        log_frame = ModernPanel(self.tab_wipe, text=" Лог ", padding=6)
+        log_frame = ttk.LabelFrame(self.tab_wipe, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
         self.wipe_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"),
                                 font=("Consolas", 10), relief="flat", bd=2)
         self.wipe_log.grid(row=0, column=0, sticky="nsew")
-        ls = ModernScrollbar(log_frame, orient="vertical", command=self.wipe_log.yview)
+        ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.wipe_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
         self.wipe_log.config(yscrollcommand=ls.set)
         self._config_log_tags(self.wipe_log)
@@ -1486,8 +1325,8 @@ class ZI_Ops:
     def build_judgment_tab(self):
         self.judgment_rows = []
         self._judgment_legacy = {}
-        panel = ModernPanel(self.tab_judgment, text=" Файлы судной ночи ", padding=10)
-        panel.pack(fill="both", expand=True, padx=10, pady=(10, 8))
+        panel = ttk.LabelFrame(self.tab_judgment, text=" Файлы судной ночи ", padding=10)
+        panel.pack(fill="both", expand=True, padx=10, pady=(10, 5))
         ttk.Label(panel, text="Начало: установить при включении. Конец: установить при выключении.\n"
                   "На противоположном этапе файл удаляется. Обе галочки — установить на обоих этапах; без галочек — не трогать.",
                   justify="left", wraplength=850).pack(anchor="w", pady=(0, 8))
@@ -1495,7 +1334,7 @@ class ZI_Ops:
         area.pack(fill="both", expand=True)
         self.judgment_canvas = tk.Canvas(area, bg=_theme_color("#1e1e2e"), highlightthickness=0, height=250)
         self.judgment_canvas.pack(side="left", fill="both", expand=True)
-        scroll = ModernScrollbar(area, orient="vertical", command=self.judgment_canvas.yview)
+        scroll = ttk.Scrollbar(area, orient="vertical", command=self.judgment_canvas.yview)
         scroll.pack(side="right", fill="y")
         self.judgment_canvas.configure(yscrollcommand=scroll.set)
         self.judgment_container = ttk.Frame(self.judgment_canvas)
@@ -1504,26 +1343,26 @@ class ZI_Ops:
         self.judgment_canvas.bind("<Configure>", lambda e: self._schedule_canvas_layout(self.judgment_canvas, window, e.width))
         controls = ttk.Frame(panel)
         controls.pack(fill="x", pady=(8, 0))
-        ModernButton(controls, text="+ Добавить файл", command=self.add_judgment_file).pack(side="left")
-        ModernButton(controls, text="Сохранить список", command=self.save_config).pack(side="left", padx=8)
+        ttk.Button(controls, text="+ Добавить файл", command=self.add_judgment_file).pack(side="left")
+        ttk.Button(controls, text="Сохранить список", command=self.save_config).pack(side="left", padx=8)
         ttk.Label(panel, text="Меняются только точные файлы из списка. Остальные файлы и папки не удаляются.",
                   foreground=_theme_color("#89dceb"), wraplength=850).pack(anchor="w", pady=(8, 0))
         ctrl = ttk.Frame(self.tab_judgment)
         ctrl.pack(fill="x", padx=10, pady=5)
-        ModernButton(ctrl, text="Включить судную ночь", style="Warn.TButton",
+        ttk.Button(ctrl, text="Включить судную ночь", style="Warn.TButton",
                    command=lambda: self.run_judgment(True)).pack(side="left")
-        ModernButton(ctrl, text="Выключить судную ночь", style="Success.TButton",
+        ttk.Button(ctrl, text="Выключить судную ночь", style="Success.TButton",
                    command=lambda: self.run_judgment(False)).pack(side="left", padx=8)
         self.judg_progress = ttk.Progressbar(ctrl, mode="determinate", length=150)
         self.judg_progress.pack(side="right")
         self.judg_status_var = tk.StringVar(value="Готов")
         ttk.Label(ctrl, textvariable=self.judg_status_var).pack(side="right", padx=8)
-        log_frame = ModernPanel(self.tab_judgment, text=" Лог ", padding=6)
+        log_frame = ttk.LabelFrame(self.tab_judgment, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         self.judg_log = tk.Text(log_frame, wrap="word", state="disabled", height=8,
                                 bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat")
         self.judg_log.pack(side="left", fill="both", expand=True)
-        scroll_log = ModernScrollbar(log_frame, orient="vertical", command=self.judg_log.yview)
+        scroll_log = ttk.Scrollbar(log_frame, orient="vertical", command=self.judg_log.yview)
         scroll_log.pack(side="right", fill="y")
         self.judg_log.configure(yscrollcommand=scroll_log.set)
         self._config_log_tags(self.judg_log)
@@ -1550,11 +1389,11 @@ class ZI_Ops:
         def remove():
             self.judgment_rows.remove(row)
             frame.destroy()
-        ModernButton(frame, text="Обзор...", command=browse).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(frame, text="Обзор...", command=browse).grid(row=0, column=0, padx=(0, 8))
         ttk.Label(frame, textvariable=row["name"]).grid(row=0, column=1, columnspan=2, sticky="w")
         ttk.Checkbutton(frame, text="Начало ночи", variable=row["start"]).grid(row=0, column=3, padx=8)
         ttk.Checkbutton(frame, text="Конец ночи", variable=row["end"]).grid(row=0, column=4, padx=8)
-        ModernButton(frame, text="×", width=3, command=remove).grid(row=0, column=5)
+        ttk.Button(frame, text="×", width=3, command=remove).grid(row=0, column=5)
         ttk.Label(frame, text="Куда/откуда:").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Entry(frame, textvariable=row["folder"]).grid(row=1, column=2, columnspan=4, sticky="ew", pady=(6, 0))
         Tooltip(frame, "Укажи папку относительно базового FTP-пути, например oxide/plugins/. Имя файла берётся с ПК.")
@@ -1589,16 +1428,16 @@ class ZI_Ops:
 
     # ===== RCON =====
     def build_rcon_tab(self):
-        conn_frame = ModernPanel(self.tab_rcon, text=" Подключение ", padding=10)
-        conn_frame.pack(fill="x", padx=10, pady=(10, 8))
+        conn_frame = ttk.LabelFrame(self.tab_rcon, text=" Подключение ", padding=10)
+        conn_frame.pack(fill="x", padx=10, pady=(10, 5))
         Tooltip(conn_frame, "Настройки подключения к RCON сервера Rust. RCON-порт обычно отличается от игрового порта!")
         self.rcon_conn_status = tk.StringVar(value="Не подключено")
         ttk.Label(conn_frame, textvariable=self.rcon_conn_status, font=("Segoe UI", 10, "bold")).pack(side="left", padx=4)
-        ModernButton(conn_frame, text="🔗 Подключиться", command=self.rcon_connect).pack(side="left", padx=8)
-        ModernButton(conn_frame, text="❌ Отключиться", command=self.rcon_disconnect).pack(side="left", padx=4)
-        ModernButton(conn_frame, text="🧪 Проверить", command=self.rcon_test).pack(side="left", padx=4)
+        ttk.Button(conn_frame, text="🔗 Подключиться", command=self.rcon_connect).pack(side="left", padx=8)
+        ttk.Button(conn_frame, text="❌ Отключиться", command=self.rcon_disconnect).pack(side="left", padx=4)
+        ttk.Button(conn_frame, text="🧪 Проверить", command=self.rcon_test).pack(side="left", padx=4)
 
-        quick_frame = ModernPanel(self.tab_rcon, text=" Быстрые команды ", padding=10)
+        quick_frame = ttk.LabelFrame(self.tab_rcon, text=" Быстрые команды ", padding=10)
         quick_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(quick_frame, "Готовые команды для быстрой отправки на сервер. Требует подключения RCON.")
         cmds = [
@@ -1609,11 +1448,11 @@ class ZI_Ops:
             ("🗺️ Seed", "server.seed", "Purple.TButton"),
             ("🛑 Остановить", "quit", "Danger.TButton"),
         ]
-        ModernButton(quick_frame, text="🌐 RustMaps", command=self.open_rustmaps).pack(side="left", padx=4, pady=4)
+        ttk.Button(quick_frame, text="🌐 RustMaps", command=self.open_rustmaps).pack(side="left", padx=4, pady=4)
         for text, cmd, style in cmds:
-            ModernButton(quick_frame, text=text, style=style, command=lambda c=cmd: self.rcon_send_command(c)).pack(side="left", padx=4, pady=4)
+            ttk.Button(quick_frame, text=text, style=style, command=lambda c=cmd: self.rcon_send_command(c)).pack(side="left", padx=4, pady=4)
 
-        manual_frame = ModernPanel(self.tab_rcon, text=" Ручной ввод ", padding=10)
+        manual_frame = ttk.LabelFrame(self.tab_rcon, text=" Ручной ввод ", padding=10)
         manual_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(manual_frame, "Введи любую RCON-команду вручную и нажми Enter или кнопку Отправить")
         manual_frame.columnconfigure(0, weight=1)
@@ -1642,10 +1481,10 @@ class ZI_Ops:
         self._suggest_tree.bind("<Tab>", self._rcon_accept_suggestion)
         self._suggest_tree.bind("<Return>", self._rcon_accept_suggestion)
         self._suggest_tree.bind("<Escape>", self._rcon_hide_suggestions)
-        ModernButton(manual_frame, text="Отправить", style="Accent.TButton",
+        ttk.Button(manual_frame, text="Отправить", style="Accent.TButton",
                    command=self._rcon_manual_send).grid(row=0, column=1)
 
-        seedr_frame = ModernPanel(self.tab_rcon, text=" Быстрый вайп через RCON ", padding=10)
+        seedr_frame = ttk.LabelFrame(self.tab_rcon, text=" Быстрый вайп через RCON ", padding=10)
         seedr_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(seedr_frame, "Быстрая смена seed + рестарт без использования FTP. Команды отправляются напрямую через RCON.")
 
@@ -1661,8 +1500,8 @@ class ZI_Ops:
         self.rcon_seed_entry = ttk.Entry(seedr_frame, textvariable=self.rcon_seed_var, width=20)
         self.rcon_seed_entry.grid(row=0, column=2, sticky="w", padx=4)
         Tooltip(self.rcon_seed_entry, "Введи seed вручную или сгенерируй случайный")
-        ModernButton(seedr_frame, text="1", command=self.generate_rcon_random_seed, width=3).grid(row=0, column=3, sticky="w", padx=4)
-        ModernButton(seedr_frame, text="2 RustMaps",
+        ttk.Button(seedr_frame, text="1", command=self.generate_rcon_random_seed, width=3).grid(row=0, column=3, sticky="w", padx=4)
+        ttk.Button(seedr_frame, text="2 RustMaps",
                    command=lambda: self.generate_via_rustmaps(self.rcon_seed_var, self.rcon_worldsize_var, self.rcon_log)).grid(row=0, column=4, sticky="w", padx=4)
 
         lbl_rws = ttk.Label(seedr_frame, text="Размер:")
@@ -1681,7 +1520,7 @@ class ZI_Ops:
         ent_rt.grid(row=1, column=3, sticky="w", padx=4, pady=4)
         Tooltip(ent_rt, "Секунды до рестарта. 60 = 1 минута")
 
-        btn_rw = ModernButton(seedr_frame, text="🗺️ Сменить seed/worldsize + Restart",
+        btn_rw = ttk.Button(seedr_frame, text="🗺️ Сменить seed/worldsize + Restart",
                    style="Accent.TButton", command=self.rcon_full_wipe)
         btn_rw.grid(row=1, column=4, sticky="e", padx=4, pady=4)
         Tooltip(btn_rw, "Меняет seed/worldsize и отправляет save + restart. RCON сам по себе не удаляет файлы мира, поэтому это НЕ FTP-вайп.")
@@ -1689,17 +1528,17 @@ class ZI_Ops:
 
         console_area = ttk.Panedwindow(self.tab_rcon, orient="horizontal")
         console_area.pack(fill="both", expand=True, padx=10, pady=(5, 10))
-        log_frame = ModernPanel(console_area, text=" Консоль RCON ", padding=6)
-        console_area.add(log_frame._section_outer, weight=2)
+        log_frame = ttk.LabelFrame(console_area, text=" Консоль RCON ", padding=6)
+        console_area.add(log_frame, weight=2)
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
         self.rcon_log = tk.Text(log_frame, width=55, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
         self.rcon_log.grid(row=0, column=0, sticky="nsew")
-        ls = ModernScrollbar(log_frame, orient="vertical", command=self.rcon_log.yview)
+        ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.rcon_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
         self.rcon_log.config(yscrollcommand=ls.set)
         self._config_log_tags(self.rcon_log)
-        query_frame = ModernPanel(console_area, text=" Query — статус сервера ", padding=12, width=290)
-        console_area.add(query_frame._section_outer, weight=1)
+        query_frame = ttk.LabelFrame(console_area, text=" Query — статус сервера ", padding=12, width=290)
+        console_area.add(query_frame, weight=1)
         query_frame.columnconfigure(1, weight=1)
         self.query_status_var = tk.StringVar(value="Укажите Query-порт в настройках")
         ttk.Label(query_frame, textvariable=self.query_status_var, wraplength=255,
@@ -1868,8 +1707,8 @@ class ZI_Ops:
 
     # ===== ПЛАГИНЫ =====
     def build_plugins_tab(self):
-        installed_frame = ModernPanel(self.tab_plugins, text=" 🔍 Установленные плагины на сервере ", padding=10)
-        installed_frame.pack(fill="both", expand=True, padx=10, pady=(10, 8))
+        installed_frame = ttk.LabelFrame(self.tab_plugins, text=" 🔍 Установленные плагины на сервере ", padding=10)
+        installed_frame.pack(fill="both", expand=True, padx=10, pady=(10, 5))
         Tooltip(installed_frame, "Сканирует .cs плагины на сервере, парсит их версии и сравнивает с актуальными (если указаны ссылки)")
         installed_frame.rowconfigure(1, weight=1); installed_frame.columnconfigure(0, weight=1)
 
@@ -1880,7 +1719,7 @@ class ZI_Ops:
         ent_pp = ttk.Entry(installed_frame, textvariable=self.plugins_server_path_var, width=40)
         ent_pp.grid(row=0, column=1, sticky="w", padx=4, pady=4)
         Tooltip(ent_pp, "FTP-путь к папке с плагинами. Не меняй, если не уверен.")
-        btn_chk = ModernButton(installed_frame, text="🔍 Проверить версии", style="Accent.TButton", command=self.check_plugins_versions)
+        btn_chk = ttk.Button(installed_frame, text="🔍 Проверить версии", style="Accent.TButton", command=self.check_plugins_versions)
         btn_chk.grid(row=0, column=2, sticky="w", padx=4, pady=4)
         Tooltip(btn_chk, "Скачивает .cs файлы с сервера, парсит версию из [Info(...)] и сравнивает с данными из списка обновлений")
         ttk.Label(installed_frame, text="(скачивает .cs файлы во временную папку, парсит версию, удаляет)", foreground=_theme_color("#89dceb")).grid(row=0, column=3, sticky="w", padx=4, pady=4)
@@ -1906,14 +1745,14 @@ class ZI_Ops:
             else:
                 self.installed_tree.column(c, width=90 if c in ("Текущая", "Последняя") else 70 if c=="Статус" else 140 if c=="Файл" else 110)
         self.installed_tree.grid(row=1, column=0, columnspan=4, sticky="nsew", pady=(4, 0))
-        tis = ModernScrollbar(installed_frame, orient="vertical", command=self.installed_tree.yview)
+        tis = ttk.Scrollbar(installed_frame, orient="vertical", command=self.installed_tree.yview)
         tis.grid(row=1, column=4, sticky="ns", pady=(4, 0))
         self.installed_tree.configure(yscrollcommand=tis.set)
         self.installed_tree.bind("<Button-1>", self._on_installed_tree_click, add="+")
         Tooltip(self.installed_tree, "В колонке «Кастомный» нажми на ☐/☑. ☑ = этот плагин будет пропущен при «Обновить все».")
         # Right-click disabled — now handled via scan dialog
 
-        update_frame = ModernPanel(self.tab_plugins, text=" 🔄 Автообновление плагинов по URL ", padding=10)
+        update_frame = ttk.LabelFrame(self.tab_plugins, text=" 🔄 Автообновление плагинов по URL ", padding=10)
         update_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(update_frame, "Список плагинов для автоматического обновления. Программа скачает → загрузит на сервер → удалит с ПК")
         ttk.Label(update_frame, text="Обновляются только устаревшие плагины. Новые версии кастомных сохраняются в Custom на ПК.", foreground=_theme_color("#89dceb")).pack(anchor="w")
@@ -1931,27 +1770,25 @@ class ZI_Ops:
         url_frame.pack(fill="both", expand=True, pady=5)
         url_frame.rowconfigure(0, weight=1); url_frame.columnconfigure(0, weight=1)
 
-        self.plugins_canvas = tk.Canvas(url_frame, bg=_theme_color("#1e1e2e"), highlightthickness=0, height=150, yscrollincrement=15)
+        self.plugins_canvas = tk.Canvas(url_frame, bg=_theme_color("#1e1e2e"), highlightthickness=0, height=150)
         self.plugins_canvas.grid(row=0, column=0, sticky="nsew")
-        vsb = ModernScrollbar(url_frame, orient="vertical", command=self.plugins_canvas.yview)
+        vsb = ttk.Scrollbar(url_frame, orient="vertical", command=self.plugins_canvas.yview)
         vsb.grid(row=0, column=1, sticky="ns")
         self.plugins_canvas.configure(yscrollcommand=vsb.set)
 
         self.plugins_container = ttk.Frame(self.plugins_canvas)
-        self._plugins_canvas_window = self.plugins_canvas.create_window((0, 0), window=self.plugins_container, anchor="nw")
-        self.plugins_canvas.bind("<Configure>", lambda e: self._schedule_canvas_layout(
-            self.plugins_canvas, window=self._plugins_canvas_window, width=e.width, region=True))
+        self.plugins_canvas.create_window((0, 0), window=self.plugins_container, anchor="nw")
         self.plugins_container.bind("<Configure>", lambda e: self._schedule_canvas_layout(self.plugins_canvas, region=True))
 
         self.plugin_rows = []
 
         btn_frame = ttk.Frame(update_frame)
         btn_frame.pack(fill="x", pady=5)
-        ModernButton(btn_frame, text="➕ Добавить", command=self.add_plugin_row).pack(side="left", padx=4)
-        ModernButton(btn_frame, text="💾 Сохранить список", command=self.save_plugins_list).pack(side="left", padx=4)
-        ModernButton(btn_frame, text="📂 Загрузить список", command=self.load_plugins_list).pack(side="left", padx=4)
-        ModernButton(btn_frame, text="🗑️ Очистить", command=self.clear_plugins).pack(side="left", padx=4)
-        btn_upall = ModernButton(btn_frame, text="🔄 Обновить все", style="Accent.TButton", command=self.update_all_plugins)
+        ttk.Button(btn_frame, text="➕ Добавить", command=self.add_plugin_row).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="💾 Сохранить список", command=self.save_plugins_list).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="📂 Загрузить список", command=self.load_plugins_list).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="🗑️ Очистить", command=self.clear_plugins).pack(side="left", padx=4)
+        btn_upall = ttk.Button(btn_frame, text="🔄 Обновить все", style="Accent.TButton", command=self.update_all_plugins)
         btn_upall.pack(side="right", padx=4)
         Tooltip(btn_upall, "Обновляет только плагины с подтверждённой новой версией. Актуальные и неизвестные пропускаются. Новые версии кастомных сохраняются в Custom")
 
@@ -1960,31 +1797,15 @@ class ZI_Ops:
         self.plugins_status_var = tk.StringVar(value="Готов")
         ttk.Label(self.tab_plugins, textvariable=self.plugins_status_var).pack(anchor="e", padx=10)
 
-        log_frame = ModernPanel(self.tab_plugins, text=" Лог ", padding=6)
+        log_frame = ttk.LabelFrame(self.tab_plugins, text=" Лог ", padding=6)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
         log_frame.rowconfigure(0, weight=1); log_frame.columnconfigure(0, weight=1)
         self.plugins_log = tk.Text(log_frame, wrap="word", state="disabled", bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), font=("Consolas", 10), relief="flat", bd=2)
         self.plugins_log.grid(row=0, column=0, sticky="nsew")
-        ls = ModernScrollbar(log_frame, orient="vertical", command=self.plugins_log.yview)
+        ls = ttk.Scrollbar(log_frame, orient="vertical", command=self.plugins_log.yview)
         ls.grid(row=0, column=1, sticky="ns")
         self.plugins_log.config(yscrollcommand=ls.set)
         self._config_log_tags(self.plugins_log)
-
-    def _plugin_list_wheel(self, event):
-        widget = event.widget
-        while widget is not None:
-            if widget == self.installed_tree:
-                # Treeview's native wheel binding already handles its cells.
-                return
-            if widget in (self.plugins_canvas, self.plugins_container):
-                delta = getattr(event, "delta", 0)
-                number = getattr(event, "num", None)
-                units = (-1 if number == 4 else 1) if number in (4, 5) else (-max(1, abs(delta) // 120) if delta > 0 else max(1, abs(delta) // 120))
-                if delta or number in (4, 5):
-                    self.plugins_canvas.yview_scroll(units * 3, "units")
-                    return "break"
-                return
-            widget = getattr(widget, "master", None)
 
     def validate_all_urls(self):
         """Проверяет все URL в списке и подсвечивает битые красным"""
@@ -2019,7 +1840,7 @@ class ZI_Ops:
 
     def add_plugin_row(self, name="", url="", page="", remote="oxide/plugins/"):
         frame = ttk.Frame(self.plugins_container)
-        frame.pack(fill="x", pady=4)
+        frame.pack(fill="x", pady=2)
         nv = tk.StringVar(value=name)
         uv = tk.StringVar(value=url)
         pv = tk.StringVar(value=page)
@@ -2040,7 +1861,7 @@ class ZI_Ops:
         ent_r = ttk.Entry(frame, textvariable=rv, width=20)
         ent_r.pack(side="left", padx=2)
         Tooltip(ent_r, "Путь на сервере куда загрузить. Например: oxide/plugins/ или oxide/plugins/PluginName.cs")
-        ModernButton(frame, text="❌", width=3, command=lambda f=frame: self.remove_plugin_row(f)).pack(side="left", padx=2)
+        ttk.Button(frame, text="❌", width=3, command=lambda f=frame: self.remove_plugin_row(f)).pack(side="left", padx=2)
         self.plugin_rows.append({"name": nv, "url": uv, "page": pv, "remote": rv, "frame": frame})
 
     def remove_plugin_row(self, frame):
@@ -2186,7 +2007,7 @@ class ZI_Ops:
                 ok, message = self._validate_plugin_url(url)
                 self._ui_after(0, finish, ok, message)
             self._submit_background(worker)
-        test_button = ModernButton(f1b, text="🧪 Проверить URL", command=test_url)
+        test_button = ttk.Button(f1b, text="🧪 Проверить URL", command=test_url)
         test_button.pack(side="right")
 
         # Page
@@ -2223,9 +2044,9 @@ class ZI_Ops:
             dlg.destroy()
             on_skip_all_callback()
 
-        ModernButton(f4, text="➕ Добавить", style="Accent.TButton", command=on_add).pack(side="left", padx=4)
-        ModernButton(f4, text="⏭ Пропустить", command=on_skip).pack(side="left", padx=4)
-        ModernButton(f4, text="⏭ Пропустить все", command=on_skip_all).pack(side="left", padx=4)
+        ttk.Button(f4, text="➕ Добавить", style="Accent.TButton", command=on_add).pack(side="left", padx=4)
+        ttk.Button(f4, text="⏭ Пропустить", command=on_skip).pack(side="left", padx=4)
+        ttk.Button(f4, text="⏭ Пропустить все", command=on_skip_all).pack(side="left", padx=4)
 
         self.root.wait_window(dlg)
         return skip_all_var[0]
@@ -3143,7 +2964,7 @@ class ZI_Ops:
                         self.log(self.plugins_log, f"⏭ {name}: {reason} ({installed_version} / {latest}).", "yellow" if comparison is None else "green")
                         continue
                     self.log(self.plugins_log, f"Скачивание {name}: {installed_version} → {latest}", "cyan")
-                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.4.0", "Accept": "text/plain,application/octet-stream,*/*"})
+                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.3.0", "Accept": "text/plain,application/octet-stream,*/*"})
                     with self._open_version_response(req, timeout=45) as resp:
                         data = resp.read()
                     if not data or re.search(br"<(?:!doctype\s+html|html|body)\b", data[:4096], re.I):
@@ -3224,7 +3045,7 @@ class ZI_Ops:
         settings_area = ttk.Frame(self.tab_settings)
         settings_area.pack(fill="both", expand=True)
         self.settings_canvas = tk.Canvas(settings_area, highlightthickness=0, bg=_theme_color("#1e1e2e"))
-        settings_scroll = ModernScrollbar(settings_area, orient="vertical", command=self.settings_canvas.yview)
+        settings_scroll = ttk.Scrollbar(settings_area, orient="vertical", command=self.settings_canvas.yview)
         settings_scroll.pack(side="right", fill="y")
         self.settings_canvas.pack(side="left", fill="both", expand=True)
         self.settings_canvas.configure(yscrollcommand=settings_scroll.set)
@@ -3234,19 +3055,19 @@ class ZI_Ops:
             self._schedule_canvas_layout(self.settings_canvas, region=True))
         self.settings_canvas.bind("<Configure>", lambda event:
             self._schedule_canvas_layout(self.settings_canvas, settings_window, event.width))
-        theme_frame = ModernPanel(self.settings_content, text=" Оформление ", padding=10)
-        theme_frame.pack(fill="x", padx=10, pady=(10, 8))
-        self.theme_button = ModernButton(theme_frame, text="Тема: тёмная", command=self.toggle_theme)
+        theme_frame = ttk.LabelFrame(self.settings_content, text=" Оформление ", padding=10)
+        theme_frame.pack(fill="x", padx=10, pady=(10, 5))
+        self.theme_button = ttk.Button(theme_frame, text="Тема: тёмная", command=self.toggle_theme)
         self.theme_button.pack(side="left")
         ttk.Label(theme_frame, text="Нажми, чтобы переключить светлую и тёмную тему.").pack(side="left", padx=10)
-        performance = ModernPanel(self.settings_content, text=" Производительность — автоматический режим ", padding=10)
+        performance = ttk.LabelFrame(self.settings_content, text=" Производительность — автоматический режим ", padding=10)
         performance.pack(fill="x", padx=10, pady=5)
         ttk.Label(performance, text=f"Доступно логических процессоров: {self._available_cpus}  •  Фоновых исполнителей: {self._background_limit}").pack(anchor="w")
         ttk.Label(performance, text="Параллелизм подбирается при запуске с запасом для интерфейса и системы. "
                   "RCON и Query работают отдельно; FTP и сайты сохраняют ограничения запросов.", wraplength=760).pack(anchor="w", pady=(5, 0))
         ttk.Label(performance, text="Распределением потоков по ядрам управляет операционная система.").pack(anchor="w", pady=(4, 0))
-        ftp_frame = ModernPanel(self.settings_content, text=" FTP Настройки ", padding=10)
-        ftp_frame.pack(fill="x", padx=10, pady=(10, 8))
+        ftp_frame = ttk.LabelFrame(self.settings_content, text=" FTP Настройки ", padding=10)
+        ftp_frame.pack(fill="x", padx=10, pady=(10, 5))
         Tooltip(ftp_frame, "Настройки подключения к FTP-серверу хостинга. Данные берутся из панели управления хостингом.")
         self.host_var = tk.StringVar()
         self.port_var = tk.StringVar(value="21")
@@ -3271,7 +3092,7 @@ class ZI_Ops:
                 def toggle_ftp_pass(event=None, entry=self.ftp_pass_entry, flag=self.ftp_pass_shown):
                     flag[0] = not flag[0]
                     entry.config(show="" if not flag[0] else "*")
-                btn_ftp = ModernButton(ftp_frame, text="👁", width=3, command=toggle_ftp_pass)
+                btn_ftp = ttk.Button(ftp_frame, text="👁", width=3, command=toggle_ftp_pass)
                 btn_ftp.grid(row=i, column=2, padx=2)
                 Tooltip(btn_ftp, "Показать/скрыть пароль")
             else:
@@ -3283,10 +3104,10 @@ class ZI_Ops:
         cb_ftps.grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         Tooltip(cb_ftps, "Включи, если хостинг требует шифрованное соединение FTPS. В FileZilla это Protocol=0 (обычный FTP), но некоторые хостинги требуют TLS.")
         ftp_frame.columnconfigure(1, weight=1)
-        self.ftp_test_button = ModernButton(ftp_frame, text="Проверить FTP и базовую папку", command=self.test_ftp_settings)
+        self.ftp_test_button = ttk.Button(ftp_frame, text="Проверить FTP и базовую папку", command=self.test_ftp_settings)
         self.ftp_test_button.grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
-        rcon_frame = ModernPanel(self.settings_content, text=" RCON Настройки ", padding=10)
+        rcon_frame = ttk.LabelFrame(self.settings_content, text=" RCON Настройки ", padding=10)
         rcon_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(rcon_frame, "Настройки удалённого управления сервером через RCON. RCON-порт отличается от игрового!")
         self.rcon_host_var = tk.StringVar()
@@ -3312,7 +3133,7 @@ class ZI_Ops:
                 def toggle_rcon_pass(event=None, entry=self.rcon_pass_entry, flag=self.rcon_pass_shown):
                     flag[0] = not flag[0]
                     entry.config(show="" if not flag[0] else "*")
-                btn_rcon = ModernButton(rcon_frame, text="👁", width=3, command=toggle_rcon_pass)
+                btn_rcon = ttk.Button(rcon_frame, text="👁", width=3, command=toggle_rcon_pass)
                 btn_rcon.grid(row=i, column=2, padx=2)
                 Tooltip(btn_rcon, "Показать/скрыть пароль")
             else:
@@ -3324,7 +3145,7 @@ class ZI_Ops:
         Tooltip(cb_ssl, "Включи, если хостинг требует WSS (WebSocket Secure) вместо обычного WS. Попробуй сначала без галочки.")
         rcon_frame.columnconfigure(1, weight=1)
 
-        query_settings = ModernPanel(self.settings_content, text=" Query — публичный статус сервера ", padding=10)
+        query_settings = ttk.LabelFrame(self.settings_content, text=" Query — публичный статус сервера ", padding=10)
         query_settings.pack(fill="x", padx=10, pady=5)
         self.query_host_var = tk.StringVar()
         self.query_port_var = tk.StringVar()
@@ -3340,7 +3161,7 @@ class ZI_Ops:
                   wraplength=650).grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         query_settings.columnconfigure(1, weight=1)
 
-        api_frame = ModernPanel(self.settings_content, text=" RustMaps API ", padding=10)
+        api_frame = ttk.LabelFrame(self.settings_content, text=" RustMaps API ", padding=10)
         api_frame.pack(fill="x", padx=10, pady=5)
         Tooltip(api_frame, "API ключ для rustmaps.com — позволяет генерировать seed через их сервис прямо из программы")
         self.api_key_var = tk.StringVar()
@@ -3354,17 +3175,17 @@ class ZI_Ops:
         def toggle_api_key():
             self.api_key_shown[0] = not self.api_key_shown[0]
             self.api_key_entry.config(show="" if not self.api_key_shown[0] else "*")
-        btn_api = ModernButton(api_frame, text="👁 Показать", command=toggle_api_key)
+        btn_api = ttk.Button(api_frame, text="👁 Показать", command=toggle_api_key)
         btn_api.grid(row=0, column=2, padx=4)
         Tooltip(btn_api, "Показать/скрыть API ключ")
         api_frame.columnconfigure(1, weight=1)
 
         btn_frame = ttk.Frame(self.settings_content)
         btn_frame.pack(fill="x", padx=10, pady=5)
-        btn_save = ModernButton(btn_frame, text="💾 Сохранить настройки", command=self.save_config)
+        btn_save = ttk.Button(btn_frame, text="💾 Сохранить настройки", command=self.save_config)
         btn_save.pack(side="left", padx=4)
         Tooltip(btn_save, "Сохраняет ВСЕ настройки (FTP, RCON, API, списки файлов судной ночи, вайп-списки) в файл rust_manager_config.json")
-        btn_load = ModernButton(btn_frame, text="📂 Загрузить настройки", command=lambda: self.load_config(filedialog.askopenfilename(filetypes=[("JSON", "*.json")])))
+        btn_load = ttk.Button(btn_frame, text="📂 Загрузить настройки", command=lambda: self.load_config(filedialog.askopenfilename(filetypes=[("JSON", "*.json")])))
         btn_load.pack(side="left", padx=4)
         Tooltip(btn_load, "Загружает настройки из JSON-файла. Можно иметь несколько конфигов для разных серверов.")
         def settings_wheel(event):
@@ -3518,7 +3339,7 @@ class ZI_Ops:
         text = tk.Text(area, wrap="word", state="normal", font=("Consolas", 10),
                        bg=_theme_color("#181825"), fg=_theme_color("#cdd6f4"), relief="flat")
         text.pack(side="left", fill="both", expand=True)
-        scroll = ModernScrollbar(area, orient="vertical", command=text.yview)
+        scroll = ttk.Scrollbar(area, orient="vertical", command=text.yview)
         scroll.pack(side="right", fill="y")
         text.configure(yscrollcommand=scroll.set)
         text.insert("end", "\n".join(lines) + "\n")
@@ -3526,12 +3347,12 @@ class ZI_Ops:
         self._config_log_tags(text)
         footer = ttk.Frame(panel)
         footer.pack(fill="x", pady=(10, 0))
-        ModernButton(footer, text="Отмена" if action else "Закрыть", command=panel.destroy).pack(side="left")
+        ttk.Button(footer, text="Отмена" if action else "Закрыть", command=panel.destroy).pack(side="left")
         if action:
             def proceed():
                 panel.destroy()
                 action()
-            ModernButton(footer, text="Выполнить", style="Warn.TButton", command=proceed).pack(side="right")
+            ttk.Button(footer, text="Выполнить", style="Warn.TButton", command=proceed).pack(side="right")
         return text
 
     def _wipe_preview_lines(self, cfg):
@@ -4495,7 +4316,7 @@ class ZI_Ops:
         self._query_cancel.set()
         for timer in self.root.tk.call("after", "info"):
             if timer is not None:
-                self.root.tk.call("after", "cancel", timer)
+                self.root.after_cancel(timer)
         self.stop_event.set()
         self.save_config(silent=True)
         with self._background_condition:
@@ -4507,11 +4328,6 @@ class ZI_Ops:
 
 
 if __name__ == "__main__":
-    ctk.set_appearance_mode("dark")
-    root = ModernWindow()
+    root = tk.Tk()
     app = ZI_Ops(root)
-    root.update_idletasks()
-    app._flush_canvas_layout()
-    root.update_idletasks()
-    root.deiconify()
     root.mainloop()
