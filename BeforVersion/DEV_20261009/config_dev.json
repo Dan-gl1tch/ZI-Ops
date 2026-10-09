@@ -1,0 +1,394 @@
+{
+  "theme": "dark",
+  "ftp_host": "185.189.255.36",
+  "ftp_port": "21",
+  "ftp_user": "D47@15098",
+  "ftp_pass": "1579",
+  "ftp_base": "Rust:185.189.255.36_35200-Server/survivalhost.org/",
+  "rcon_host": "185.189.255.36",
+  "rcon_port": "35101",
+  "rcon_pass": "siybi57n",
+  "rcon_path": "",
+  "rcon_ssl": false,
+  "query_host": "185.189.255.36",
+  "query_port": "35210",
+  "api_key": "c4614390c28e4774ab00147e3b7c0cf0",
+  "ftps": false,
+  "custom_plugins": [
+    "armoredtrain",
+    "radgren",
+    "recyclerprotection",
+    "safe",
+    "skills",
+    "sputnik",
+    "xdquest",
+    "zecolootui"
+  ],
+  "plugins_server_path": "oxide/plugins/",
+  "judgment_files": [
+    {
+      "local": "C:/Users/Dan/Desktop/Rust/JudgmentNight.cs",
+      "folder": "oxide/plugins/",
+      "start": true,
+      "end": false
+    },
+    {
+      "local": "C:/Users/Dan/Desktop/Rust/NoMLRSMount.cs",
+      "folder": "oxide/plugins/",
+      "start": false,
+      "end": true
+    },
+    {
+      "local": "C:/Users/Dan/Desktop/Rust/TruePVE.cs",
+      "folder": "oxide/plugins/",
+      "start": false,
+      "end": true
+    }
+  ],
+  "judgment_legacy": {
+    "judg_on_del": "oxide/plugins/TruePVE.cs\noxide/plugins/NoMLRSMount.cs",
+    "judg_on_upload": "C:/Users/Dan/Desktop/Rust/JudgmentNight.cs",
+    "judg_on_remote": "oxide/plugins/JudgmentNight.cs",
+    "judg_off_del": "oxide/plugins/JudgmentNight.cs",
+    "judg_off_upload_0": "C:/Users/Dan/Desktop/Rust/TruePVE.cs",
+    "judg_off_upload_1": "C:/Users/Dan/Desktop/Rust/NoMLRSMount.cs",
+    "judg_off_remote_0": "oxide/plugins/TruePVE.cs",
+    "judg_off_remote_1": "oxide/plugins/NoMLRSMount.cs"
+  },
+  "wipe_files": "oxide/data/ImageLibrary/image_data.json\noxide/data/ImageLibrary/image_urls.json\noxide/data/ImageLibrary/skin_data.json\noxide/data/IQSystem/IQCases/DataPlayer.json\noxide/data/IQSystem/IQCases/DataPlayerTakeGiftCase.json\noxide/data/Kits/player_data.json\noxide/data/MiningFarm/FarmList.json\noxide/data/XDQuest/PlayerInfo.json\noxide/data/Backpack_Data.json\noxide/data/BackPumpJack.json\noxide/data/CapsulesData.json\noxide/data/Convoy.json\noxide/data/Economics.json\noxide/data/ExcavatorLock.json\noxide/data/Friends.json\noxide/data/NTeleportationHome.json\noxide/data/Remove_NewEntity.json\noxide/data/SpawnHeli.json\noxide/data/StarterMoney.json",
+  "wipe_folders": "oxide/data/Skills/Players\noxide/data/XDStatistics/Players",
+  "wipe_cfg_template": "C:/Users/Dan/Documents/server.cfg",
+  "wipe_worldsize": "4250",
+  "wipe_seed": "89927194",
+  "wipe_restart_sec": "60",
+  "wipe_restart_msg": "Вайп сервера! Рестарт через 60 секунд...",
+  "wipe_change_seed": false,
+  "wipe_random_seed": false,
+  "wipe_restart": false,
+  "plugins": [
+    {
+      "name": "AdminHammer",
+      "url": "https://umod.org/plugins/AdminHammer.cs",
+      "page": "https://umod.org/plugins/admin-hammer",
+      "remote": "oxide/plugins/AdminHammer.cs"
+    },
+    {
+      "name": "AdminRadar",
+      "url": "https://umod.org/plugins/AdminRadar.cs",
+      "page": "https://umod.org/plugins/admin-radar",
+      "remote": "oxide/plugins/AdminRadar.cs"
+    },
+    {
+      "name": "AFK",
+      "url": "https://umod.org/plugins/AFK.cs",
+      "page": "https://umod.org/plugins/idle-manager",
+      "remote": "oxide/plugins/AFK.cs"
+    },
+    {
+      "name": "AntiLadderandTwig",
+      "url": "https://umod.org/plugins/AntiLadderandTwig.cs",
+      "page": "https://umod.org/plugins/anti-ladder-and-twig",
+      "remote": "oxide/plugins/AntiLadderandTwig.cs"
+    },
+    {
+      "name": "AutomatedEvents",
+      "url": "https://umod.org/plugins/AutomatedEvents.cs",
+      "page": "https://umod.org/plugins/automated-events",
+      "remote": "oxide/plugins/AutomatedEvents.cs"
+    },
+    {
+      "name": "BackPumpJack",
+      "url": "https://umod.org/plugins/BackPumpJack.cs",
+      "page": "https://umod.org/plugins/back-pump-jack",
+      "remote": "oxide/plugins/BackPumpJack.cs"
+    },
+    {
+      "name": "BetterChatMute",
+      "url": "https://umod.org/plugins/BetterChatMute.cs",
+      "page": "https://umod.org/plugins/better-chat-mute",
+      "remote": "oxide/plugins/BetterChatMute.cs"
+    },
+    {
+      "name": "BuildingWorkbench",
+      "url": "https://umod.org/plugins/BuildingWorkbench.cs",
+      "page": "https://umod.org/plugins/building-workbench",
+      "remote": "oxide/plugins/BuildingWorkbench.cs"
+    },
+    {
+      "name": "ClearWeather",
+      "url": "https://umod.org/plugins/ClearWeather.cs",
+      "page": "https://umod.org/plugins/clear-weather",
+      "remote": "oxide/plugins/ClearWeather.cs"
+    },
+    {
+      "name": "CommandRateLimiter",
+      "url": "https://umod.org/plugins/CommandRateLimiter.cs",
+      "page": "https://umod.org/plugins/command-rate-limiter",
+      "remote": "oxide/plugins/CommandRateLimiter.cs"
+    },
+    {
+      "name": "CompoundOptions",
+      "url": "https://umod.org/plugins/CompoundOptions.cs",
+      "page": "https://umod.org/plugins/compound-options",
+      "remote": "oxide/plugins/CompoundOptions.cs"
+    },
+    {
+      "name": "CopyPaste",
+      "url": "https://umod.org/plugins/CopyPaste.cs",
+      "page": "https://umod.org/plugins/copy-paste",
+      "remote": "oxide/plugins/CopyPaste.cs"
+    },
+    {
+      "name": "CupboardLimiter",
+      "url": "https://umod.org/plugins/CupboardLimiter.cs",
+      "page": "https://umod.org/plugins/cupboard-limiter",
+      "remote": "oxide/plugins/CupboardLimiter.cs"
+    },
+    {
+      "name": "CustomGenetics",
+      "url": "https://umod.org/plugins/CustomGenetics.cs",
+      "page": "https://umod.org/plugins/custom-genetics",
+      "remote": "oxide/plugins/CustomGenetics.cs"
+    },
+    {
+      "name": "CustomVendingSetup",
+      "url": "https://umod.org/plugins/CustomVendingSetup.cs",
+      "page": "https://umod.org/plugins/custom-vending-setup",
+      "remote": "oxide/plugins/CustomVendingSetup.cs"
+    },
+    {
+      "name": "DynamicPopulation",
+      "url": "https://umod.org/plugins/DynamicPopulation.cs",
+      "page": "https://umod.org/plugins/dynamic-population",
+      "remote": "oxide/plugins/DynamicPopulation.cs"
+    },
+    {
+      "name": "EntityLimit",
+      "url": "https://umod.org/plugins/EntityLimit.cs",
+      "page": "https://umod.org/plugins/entity-limit",
+      "remote": "oxide/plugins/EntityLimit.cs"
+    },
+    {
+      "name": "ExcavatorLock",
+      "url": "https://umod.org/plugins/ExcavatorLock.cs",
+      "page": "https://umod.org/plugins/excavator-lock",
+      "remote": "oxide/plugins/ExcavatorLock.cs"
+    },
+    {
+      "name": "Friends",
+      "url": "https://umod.org/plugins/Friends.cs",
+      "page": "https://umod.org/plugins/friends",
+      "remote": "oxide/plugins/Friends.cs"
+    },
+    {
+      "name": "HitIcon",
+      "url": "https://umod.org/plugins/HitIcon.cs",
+      "page": "https://umod.org/plugins/hit-icon",
+      "remote": "oxide/plugins/HitIcon.cs"
+    },
+    {
+      "name": "IgnoreCollision",
+      "url": "https://umod.org/plugins/IgnoreCollision.cs",
+      "page": "https://umod.org/plugins/ignore-collision",
+      "remote": "oxide/plugins/IgnoreCollision.cs"
+    },
+    {
+      "name": "ImageLibrary",
+      "url": "https://umod.org/plugins/ImageLibrary.cs",
+      "page": "https://umod.org/plugins/image-library",
+      "remote": "oxide/plugins/ImageLibrary.cs"
+    },
+    {
+      "name": "InstantCraft",
+      "url": "https://umod.org/plugins/InstantCraft.cs",
+      "page": "https://umod.org/plugins/instant-craft",
+      "remote": "oxide/plugins/InstantCraft.cs"
+    },
+    {
+      "name": "Kits",
+      "url": "https://umod.org/plugins/Kits.cs",
+      "page": "https://umod.org/plugins/rust-kits",
+      "remote": "oxide/plugins/Kits.cs"
+    },
+    {
+      "name": "LimitedSmokeGrenade",
+      "url": "https://umod.org/plugins/LimitedSmokeGrenade.cs",
+      "page": "https://umod.org/plugins/limited-smoke-grenade",
+      "remote": "oxide/plugins/LimitedSmokeGrenade.cs"
+    },
+    {
+      "name": "LootBouncer",
+      "url": "https://umod.org/plugins/LootBouncer.cs",
+      "page": "https://umod.org/plugins/loot-bouncer",
+      "remote": "oxide/plugins/LootBouncer.cs"
+    },
+    {
+      "name": "LootDefender",
+      "url": "https://umod.org/plugins/LootDefender.cs",
+      "page": "https://umod.org/plugins/loot-defender",
+      "remote": "oxide/plugins/LootDefender.cs"
+    },
+    {
+      "name": "MagicOilRigPanel",
+      "url": "https://umod.org/plugins/MagicOilRigPanel.cs",
+      "page": "https://umod.org/plugins/magic-oil-rig-panel",
+      "remote": "oxide/plugins/MagicOilRigPanel.cs"
+    },
+    {
+      "name": "MagicPanel",
+      "url": "https://umod.org/plugins/MagicPanel.cs",
+      "page": "https://umod.org/plugins/magic-panel",
+      "remote": "oxide/plugins/MagicPanel.cs"
+    },
+    {
+      "name": "MonumentFinder",
+      "url": "https://umod.org/plugins/MonumentFinder.cs",
+      "page": "https://umod.org/plugins/monument-finder",
+      "remote": "oxide/plugins/MonumentFinder.cs"
+    },
+    {
+      "name": "NightVision",
+      "url": "https://umod.org/plugins/NightVision.cs",
+      "page": "https://umod.org/plugins/night-vision",
+      "remote": "oxide/plugins/NightVision.cs"
+    },
+    {
+      "name": "NightZombies",
+      "url": "https://umod.org/plugins/NightZombies.cs",
+      "page": "https://umod.org/plugins/night-zombies",
+      "remote": "oxide/plugins/NightZombies.cs"
+    },
+    {
+      "name": "NoDurability",
+      "url": "https://umod.org/plugins/NoDurability.cs",
+      "page": "https://umod.org/plugins/no-durability",
+      "remote": "oxide/plugins/NoDurability.cs"
+    },
+    {
+      "name": "NoGiveNotices",
+      "url": "https://umod.org/plugins/NoGiveNotices.cs",
+      "page": "https://umod.org/plugins/no-give-notices",
+      "remote": "oxide/plugins/NoGiveNotices.cs"
+    },
+    {
+      "name": "NoMLRSMount",
+      "url": "https://umod.org/plugins/NoMLRSMount.cs",
+      "page": "https://umod.org/plugins/no-mlrs-mount",
+      "remote": "oxide/plugins/NoMLRSMount.cs"
+    },
+    {
+      "name": "NTeleportation",
+      "url": "https://umod.org/plugins/NTeleportation.cs",
+      "page": "https://umod.org/plugins/nteleportation",
+      "remote": "oxide/plugins/NTeleportation.cs"
+    },
+    {
+      "name": "PersonalHeli",
+      "url": "https://umod.org/plugins/PersonalHeli.cs",
+      "page": "https://umod.org/plugins/personal-heli",
+      "remote": "oxide/plugins/PersonalHeli.cs"
+    },
+    {
+      "name": "PlayerEntityRemover",
+      "url": "https://umod.org/plugins/PlayerEntityRemover.cs",
+      "page": "https://umod.org/plugins/player-entity-remover",
+      "remote": "oxide/plugins/PlayerEntityRemover.cs"
+    },
+    {
+      "name": "PreventLooting",
+      "url": "https://umod.org/plugins/PreventLooting.cs",
+      "page": "https://umod.org/plugins/prevent-looting",
+      "remote": "oxide/plugins/PreventLooting.cs"
+    },
+    {
+      "name": "RaidableBases",
+      "url": "https://umod.org/plugins/RaidableBases.cs",
+      "page": "https://umod.org/plugins/raidable-bases",
+      "remote": "oxide/plugins/RaidableBases.cs"
+    },
+    {
+      "name": "Recycle",
+      "url": "https://umod.org/plugins/Recycle.cs",
+      "page": "https://umod.org/plugins/recycle",
+      "remote": "oxide/plugins/Recycle.cs"
+    },
+    {
+      "name": "RecycleManager",
+      "url": "https://umod.org/plugins/RecycleManager.cs",
+      "page": "https://umod.org/plugins/recycle-manager",
+      "remote": "oxide/plugins/RecycleManager.cs"
+    },
+    {
+      "name": "SpawnHeli",
+      "url": "https://umod.org/plugins/SpawnHeli.cs",
+      "page": "https://umod.org/plugins/spawn-heli",
+      "remote": "oxide/plugins/SpawnHeli.cs"
+    },
+    {
+      "name": "StackModifier",
+      "url": "https://umod.org/plugins/StackModifier.cs",
+      "page": "https://umod.org/plugins/stack-modifier",
+      "remote": "oxide/plugins/StackModifier.cs"
+    },
+    {
+      "name": "StarterMoney",
+      "url": "https://umod.org/plugins/StarterMoney.cs",
+      "page": "https://umod.org/plugins/starter-money",
+      "remote": "oxide/plugins/StarterMoney.cs"
+    },
+    {
+      "name": "SuperCard",
+      "url": "https://umod.org/plugins/SuperCard.cs",
+      "page": "https://umod.org/plugins/super-card",
+      "remote": "oxide/plugins/SuperCard.cs"
+    },
+    {
+      "name": "SurveyInfo",
+      "url": "https://umod.org/plugins/SurveyInfo.cs",
+      "page": "https://umod.org/plugins/survey-info",
+      "remote": "oxide/plugins/SurveyInfo.cs"
+    },
+    {
+      "name": "TickrateLimiter",
+      "url": "https://umod.org/plugins/TickrateLimiter.cs",
+      "page": "https://umod.org/plugins/tickrate-limiter",
+      "remote": "oxide/plugins/TickrateLimiter.cs"
+    },
+    {
+      "name": "TimedPermissions",
+      "url": "https://umod.org/plugins/TimedPermissions.cs",
+      "page": "https://umod.org/plugins/timed-permissions",
+      "remote": "oxide/plugins/TimedPermissions.cs"
+    },
+    {
+      "name": "TruePVE",
+      "url": "https://umod.org/plugins/TruePVE.cs",
+      "page": "https://umod.org/plugins/true-pve",
+      "remote": "oxide/plugins/TruePVE.cs"
+    },
+    {
+      "name": "Vanish",
+      "url": "https://umod.org/plugins/Vanish.cs",
+      "page": "https://umod.org/plugins/vanish",
+      "remote": "oxide/plugins/Vanish.cs"
+    },
+    {
+      "name": "VehicleDeployedLocks",
+      "url": "https://umod.org/plugins/VehicleDeployedLocks.cs",
+      "page": "https://umod.org/plugins/vehicle-deployed-locks",
+      "remote": "oxide/plugins/VehicleDeployedLocks.cs"
+    },
+    {
+      "name": "VendingInStock",
+      "url": "https://umod.org/plugins/VendingInStock.cs",
+      "page": "https://umod.org/plugins/vending-in-stock",
+      "remote": "oxide/plugins/VendingInStock.cs"
+    },
+    {
+      "name": "WeatherEvents",
+      "url": "https://umod.org/plugins/WeatherEvents.cs",
+      "page": "https://umod.org/plugins/weather-events",
+      "remote": "oxide/plugins/WeatherEvents.cs"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+# UTF-8
+# Windows version information for ZI-Ops / PyInstaller --version-file.
+VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=(1, 6, 3, 0),
+        prodvers=(1, 6, 3, 0),
+        mask=0x3f,
+        flags=0x0,
+        OS=0x40004,
+        fileType=0x1,
+        subtype=0x0,
+        date=(0, 0)
+    ),
+    kids=[
+        StringFileInfo([
+            StringTable('041904B0', [
+                StringStruct('CompanyName', 'danilmine_D47'),
+                StringStruct('FileDescription', 'ZI-Ops — Управление сервером Rust'),
+                StringStruct('FileVersion', '1.6.3.0'),
+                StringStruct('InternalName', 'ZI-Ops'),
+                StringStruct('LegalCopyright', '2026 - danilmine_D47'),
+                StringStruct('OriginalFilename', 'ZI-Ops.exe'),
+                StringStruct('ProductName', 'ZI-Ops'),
+                StringStruct('ProductVersion', '1.6.3.0'),
+                StringStruct('Comments', 'Автор: danilmine_D47'),
+                StringStruct('Author', 'danilmine_D47')
+            ])
+        ]),
+        VarFileInfo([VarStruct('Translation', [1049, 1200])])
+    ]
+)
