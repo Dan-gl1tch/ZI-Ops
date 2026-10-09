@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.6.2.0
-#    nuitka-project: --product-version=1.6.2.0
+#    nuitka-project: --file-version=1.6.3.0
+#    nuitka-project: --product-version=1.6.3.0
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -42,10 +42,115 @@ import struct
 import queue
 import bz2
 import zlib
+import http.client
+import ssl
+
+class ReusableHTTP:
+    """Verified TLS, reusable per-thread connections, urllib-compatible buffered response."""
+    def __init__(self):
+        self._connections = {}
+        self._lock = threading.Lock()
+        self._closed = False
+        self._tls_context = ssl.create_default_context()
+
+    def close_thread(self):
+        thread_id = threading.get_ident()
+        with self._lock:
+            keys = [key for key in self._connections if key[0] == thread_id]
+            connections = [self._connections.pop(key) for key in keys]
+        for connection in connections:
+            connection.close()
+
+    def close(self):
+        with self._lock:
+            self._closed = True
+            connections = list(self._connections.values())
+            self._connections.clear()
+        for connection in connections:
+            if connection.sock is not None:
+                try:
+                    connection.sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+            connection.close()
+
+    def open(self, request, timeout):
+        url = request.full_url
+        headers = dict(request.header_items())
+        headers["Accept-Encoding"] = "identity"
+        for redirect in range(6):
+            parts = urllib.parse.urlsplit(url)
+            host = parts.hostname or ""
+            if parts.scheme not in ("http", "https") or not host:
+                raise urllib.error.URLError("Неподдерживаемый адрес HTTP")
+            # Preserve configured proxy support through the standard urllib transport.
+            proxies = urllib.request.getproxies()
+            if proxies.get(parts.scheme) and not urllib.request.proxy_bypass(host):
+                return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
+            key = (threading.get_ident(), parts.scheme, host, parts.port)
+            with self._lock:
+                if self._closed:
+                    raise urllib.error.URLError("HTTP транспорт закрыт")
+                connection = self._connections.get(key)
+                if connection is None:
+                    if parts.scheme == "https":
+                        connection = http.client.HTTPSConnection(host, parts.port, timeout=timeout, context=self._tls_context)
+                    else:
+                        connection = http.client.HTTPConnection(host, parts.port, timeout=timeout)
+                    self._connections[key] = connection
+            connection.timeout = timeout
+            if connection.sock is not None:
+                connection.sock.settimeout(timeout)
+            path = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
+            try:
+                connection.request(request.get_method(), path, body=request.data, headers=headers)
+                response = connection.getresponse()
+                status, reason, response_headers = response.status, response.reason, response.headers
+                body = response.read()
+                response.close()
+            except (OSError, http.client.HTTPException) as error:
+                with self._lock:
+                    self._connections.pop(key, None)
+                connection.close()
+                raise urllib.error.URLError(error) from error
+            if status in (301, 302, 303, 307, 308) and response_headers.get("Location"):
+                target = urllib.parse.urljoin(url, response_headers["Location"])
+                if urllib.parse.urlsplit(target).netloc != parts.netloc:
+                    headers = {k: v for k, v in headers.items() if k.lower() not in ("authorization", "cookie", "host")}
+                url = target
+                continue
+            if status >= 400:
+                raise urllib.error.HTTPError(url, status, reason, response_headers, io.BytesIO(body))
+            buffered = io.BytesIO(body)
+            buffered.headers = response_headers
+            buffered.status = status
+            buffered.geturl = lambda: url
+            return buffered
+        raise urllib.error.URLError("Слишком много перенаправлений")
+
+
+def detect_background_capacity():
+    """Use CPUs available to this process, with conservative network concurrency."""
+    available = None
+    process_count = getattr(os, "process_cpu_count", None)
+    if process_count is not None:
+        try:
+            available = process_count()
+        except (OSError, NotImplementedError):
+            pass
+    if available is None:
+        try:
+            available = os.cpu_count()
+        except (OSError, NotImplementedError):
+            pass
+    available = max(1, int(available or 1))
+    workers = max(1, min(4, (available + 2) // 3))
+    return available, workers
+
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.6.2.0"
+APP_VERSION = "1.6.3.0"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -412,7 +517,7 @@ class RustRCON:
     def disconnect(self):
         if self.ws:
             try:
-                self.ws.close()
+                self.ws.close(timeout=0.25)
             except Exception:
                 pass
         self.connected = False
@@ -529,6 +634,22 @@ class ZI_Ops:
 
     def __init__(self, root):
         self.root = root
+        self._ui_jobs = queue.Queue()
+        self._log_records = queue.Queue()
+        self._progress_pending = {}
+        self._progress_lock = threading.Lock()
+        self._canvas_layout_pending = {}
+        self._canvas_layout_after = None
+        self._installed_sort_after = None
+        self._installed_filename_items = {}
+        self._background_jobs = queue.Queue()
+        self._background_condition = threading.Condition()
+        self._available_cpus, self._background_limit = detect_background_capacity()
+        self._background_active = 0
+        self._background_stopping = False
+        for index in range(self._background_limit):
+            threading.Thread(target=self._background_loop, daemon=True, name=f"dev-background-{index}").start()
+        self._ui_after(25, self._drain_ui_jobs)
         self.theme_mode = "dark"
         global _ACTIVE_THEME
         _ACTIVE_THEME = "dark"
@@ -543,10 +664,15 @@ class ZI_Ops:
         self._running = False
         self.stop_requested = False
         self.stop_event = threading.Event()
+        self._network_metrics_lock = threading.Lock()
+        self._network_metrics = None
+        self._http_transport = ReusableHTTP()
         self._http_rate_lock = threading.Lock()
         self._http_next_request = {}
+        self._http_adaptive_intervals = {}
         self._http_blocked_until = {}
         self._plugin_version_cache = {}
+        self._installed_info_cache = {}
         self._rcon_connecting = False
         self.rcon_lock = threading.Lock()
         self.rcon_client = None
@@ -570,10 +696,107 @@ class ZI_Ops:
         self.build_ui()
         self.load_config(self.auto_config_path, silent=True)
         self.notebook.bind("<<NotebookTabChanged>>", self._query_tab_changed, add="+")
-        self._query_poll_after = self.root.after(100, self._query_poll)
+        self._query_poll_after = self._ui_after(100, self._query_poll)
         if not WEBSOCKET_OK:
-            self.root.after(1000, lambda: messagebox.showwarning("RCON недоступен",
+            self._ui_after(1000, lambda: messagebox.showwarning("RCON недоступен",
                 "Библиотека websocket-client не установлена.\nRCON-функции недоступны.\n\nУстанови: pip install websocket-client"))
+
+    def _ui_after(self, delay, callback=None, *args):
+        if threading.current_thread() is threading.main_thread():
+            return self.root.after(delay, callback, *args)
+        if callback is not None and not self._closing:
+            self._ui_jobs.put((delay, callback, args))
+        return None
+
+    def _drain_ui_jobs(self):
+        if self._closing:
+            return
+        deadline = time.monotonic() + 0.006
+        while time.monotonic() < deadline:
+            try:
+                delay, callback, args = self._ui_jobs.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                if delay:
+                    self.root.after(delay, callback, *args)
+                else:
+                    callback(*args)
+            except Exception:
+                self.root.report_callback_exception(*sys.exc_info())
+        self._flush_ui_updates()
+        self.root.after(25 if not self._ui_jobs.empty() else 60, self._drain_ui_jobs)
+
+    def _background_loop(self):
+        while True:
+            target, args = self._background_jobs.get()
+            with self._background_condition:
+                self._background_condition.wait_for(lambda: self._background_stopping or self._background_active < self._background_limit)
+                if self._background_stopping:
+                    return
+                self._background_active += 1
+            try:
+                target(*args)
+            except Exception as error:
+                self._ui_after(0, lambda e=error: self.root.report_callback_exception(type(e), e, e.__traceback__))
+            finally:
+                with self._background_condition:
+                    self._background_active -= 1
+                    self._background_condition.notify_all()
+                self._background_jobs.task_done()
+
+    def _submit_background(self, target, args=()):
+        if not self._background_stopping:
+            self._background_jobs.put((target, args))
+
+    def _layout_independent_shortcut(self, event):
+        # Windows virtual-key codes stay the same when switching EN/RU layouts.
+        if event.state & (0x8 | 0x20000):
+            return None
+        widget = event.widget
+        if sys.platform == "win32":
+            key = {65: "a", 67: "c", 86: "v", 88: "x", 90: "z", 89: "y"}.get(event.keycode)
+        else:
+            key = str(event.keysym).lower()
+        if key not in ("a", "c", "v", "x", "z", "y"):
+            return None
+        try:
+            kind = widget.winfo_class()
+            # Standard Tk bindings already handle Latin shortcuts. Avoid a second paste/cut.
+            if sys.platform == "win32" and str(event.keysym).lower() == key and kind != "Treeview":
+                return None
+            if key == "c":
+                if kind == "Treeview":
+                    selected = widget.selection()
+                    if not selected:
+                        return "break"
+                    copied = "\n".join("\t".join(str(value) for value in widget.item(item, "values")) for item in selected)
+                elif kind in ("Text", "Entry", "TEntry", "TCombobox", "Spinbox", "TSpinbox"):
+                    copied = widget.selection_get()
+                else:
+                    return None
+                self.root.clipboard_clear()
+                self.root.clipboard_append(copied)
+                return "break"
+            if key == "a":
+                if kind == "Text":
+                    widget.tag_add("sel", "1.0", "end-1c")
+                elif kind in ("Entry", "TEntry", "TCombobox", "Spinbox", "TSpinbox"):
+                    widget.selection_range(0, "end")
+                elif kind == "Treeview":
+                    widget.selection_set(widget.get_children())
+                else:
+                    return None
+                return "break"
+            if kind not in ("Text", "Entry", "TEntry", "TCombobox", "Spinbox", "TSpinbox"):
+                return None
+            virtual = {"v": "<<Paste>>", "x": "<<Cut>>", "z": "<<Undo>>", "y": "<<Redo>>"}[key]
+            if key == "z" and event.state & 0x1:
+                virtual = "<<Redo>>"
+            widget.event_generate(virtual)
+            return "break"
+        except tk.TclError:
+            return "break"
 
     def configure_styles(self):
         bg, fg, accent, surface = _theme_color("#1e1e2e"), _theme_color("#cdd6f4"), _theme_color("#89b4fa"), _theme_color("#313244")
@@ -721,9 +944,81 @@ class ZI_Ops:
         return [v.get() for v in vars_]
 
     def _set_progress(self, widget, status_var, value, text=None):
-        self.root.after(0, lambda v=max(0, min(100, int(value))): widget.configure(value=v))
-        if text is not None:
-            self.root.after(0, lambda t=text: status_var.set(t))
+        if self._closing:
+            return
+        with self._progress_lock:
+            previous = self._progress_pending.get(widget)
+            if text is None and previous is not None:
+                text = previous[2]
+            self._progress_pending[widget] = (status_var, max(0, min(100, int(value))), text)
+
+    def _flush_ui_updates(self):
+        with self._progress_lock:
+            updates = self._progress_pending
+            self._progress_pending = {}
+        for widget, (status_var, value, text) in updates.items():
+            if widget.winfo_exists():
+                if int(float(widget.cget("value"))) != value:
+                    widget.configure(value=value)
+                if text is not None and status_var.get() != text:
+                    status_var.set(text)
+        groups = {}
+        deadline = time.monotonic() + 0.003
+        for _ in range(200):
+            if time.monotonic() > deadline:
+                break
+            try:
+                widget, text, color = self._log_records.get_nowait()
+            except queue.Empty:
+                break
+            groups.setdefault(widget, []).extend((text + "\n", (color,)))
+        for widget, parts in groups.items():
+            if not widget.winfo_exists():
+                continue
+            follow = widget.yview()[1] >= 0.995
+            widget.configure(state="normal")
+            widget.insert("end", *parts)
+            if follow:
+                widget.see("end")
+            widget.configure(state="disabled")
+
+    def _request_installed_sort(self):
+        if self._installed_sort_after is None and not self._closing:
+            self._installed_sort_after = self.root.after(100, self._finish_installed_sort)
+
+    def _finish_installed_sort(self):
+        self._installed_sort_after = None
+        if not self._closing:
+            self._apply_installed_plugins_sort()
+
+    def _schedule_canvas_layout(self, canvas, window=None, width=None, region=False):
+        if self._closing:
+            return
+        update = self._canvas_layout_pending.setdefault(canvas, {})
+        if region:
+            update["region"] = True
+        if window is not None:
+            update["window"] = window
+            update["width"] = width
+        if self._canvas_layout_after is None:
+            self._canvas_layout_after = self.root.after(40, self._flush_canvas_layout)
+
+    def _flush_canvas_layout(self):
+        self._canvas_layout_after = None
+        pending = self._canvas_layout_pending
+        self._canvas_layout_pending = {}
+        if self._closing:
+            return
+        for canvas, update in pending.items():
+            if not canvas.winfo_exists():
+                continue
+            if "window" in update and float(canvas.itemcget(update["window"], "width")) != update["width"]:
+                canvas.itemconfigure(update["window"], width=update["width"])
+            if update.get("region"):
+                bounds = canvas.bbox("all")
+                current = tuple(float(n) for n in canvas.cget("scrollregion").split())
+                if bounds is not None and current != bounds:
+                    canvas.configure(scrollregion=bounds)
 
     def build_ui(self):
         ttk.Label(
@@ -751,6 +1046,7 @@ class ZI_Ops:
         self.tab_support = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_support, text="  ❤ Поддержать автора  ")
         self.build_support_tab()
+        self.root.bind_all("<Control-KeyPress>", self._layout_independent_shortcut, add="+")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def build_support_tab(self):
@@ -1043,9 +1339,8 @@ class ZI_Ops:
         self.judgment_canvas.configure(yscrollcommand=scroll.set)
         self.judgment_container = ttk.Frame(self.judgment_canvas)
         window = self.judgment_canvas.create_window((0, 0), window=self.judgment_container, anchor="nw")
-        self.judgment_container.bind("<Configure>", lambda e: self.judgment_canvas.configure(
-            scrollregion=self.judgment_canvas.bbox("all")))
-        self.judgment_canvas.bind("<Configure>", lambda e: self.judgment_canvas.itemconfigure(window, width=e.width))
+        self.judgment_container.bind("<Configure>", lambda e: self._schedule_canvas_layout(self.judgment_canvas, region=True))
+        self.judgment_canvas.bind("<Configure>", lambda e: self._schedule_canvas_layout(self.judgment_canvas, window, e.width))
         controls = ttk.Frame(panel)
         controls.pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text="+ Добавить файл", command=self.add_judgment_file).pack(side="left")
@@ -1181,7 +1476,7 @@ class ZI_Ops:
         entry.bind("<Down>", lambda event: self._rcon_move_suggestion(1))
         entry.bind("<Up>", lambda event: self._rcon_move_suggestion(-1))
         entry.bind("<FocusIn>", self._rcon_update_suggestions)
-        entry.bind("<FocusOut>", lambda event: self.root.after(100, self._rcon_suggestion_focus_out))
+        entry.bind("<FocusOut>", lambda event: self._ui_after(100, self._rcon_suggestion_focus_out))
         self._suggest_tree.bind("<ButtonRelease-1>", self._rcon_accept_suggestion)
         self._suggest_tree.bind("<Tab>", self._rcon_accept_suggestion)
         self._suggest_tree.bind("<Return>", self._rcon_accept_suggestion)
@@ -1356,7 +1651,7 @@ class ZI_Ops:
                 raise ValueError()
         except ValueError:
             self.query_status_var.set("Укажите адрес и Query-порт (1–65535) в настройках")
-            self._query_after = self.root.after(10000, self._query_refresh)
+            self._query_after = self._ui_after(10000, self._query_refresh)
             return
         self.query_status_var.set("Запрос Query…")
         self._query_busy = True
@@ -1376,7 +1671,7 @@ class ZI_Ops:
                 result, error = None, "Не удалось прочитать ответ Query"
             self._query_results.put((epoch, endpoint, result, error))
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._submit_background(worker, ())
 
     def _query_poll(self):
         if self._closing:
@@ -1401,14 +1696,14 @@ class ZI_Ops:
                     else:
                         suffix = "\nПоказаны последние полученные данные." if self.query_values["updated"].get() != "—" else ""
                         self.query_status_var.set(error + suffix)
-                    self._query_after = self.root.after(10000, self._query_refresh)
+                    self._query_after = self._ui_after(10000, self._query_refresh)
                 else:
                     self._query_pending = True
                 if self._query_pending:
                     if self._query_after is not None:
                         self.root.after_cancel(self._query_after)
                     self._query_refresh()
-        self._query_poll_after = self.root.after(100, self._query_poll)
+        self._query_poll_after = self._ui_after(100, self._query_poll)
 
     # ===== ПЛАГИНЫ =====
     def build_plugins_tab(self):
@@ -1434,10 +1729,13 @@ class ZI_Ops:
         self.custom_plugins = set()
         self._installed_item_keys = {}
 
-        self._installed_sort_column = None
+        self._installed_sort_column = "Файл"
         self._installed_sort_reverse = False
         cols = ("Файл", "Название", "Автор", "Текущая", "Последняя", "Кастомный", "Статус")
         self.installed_tree = ttk.Treeview(installed_frame, columns=cols, show="headings", height=8)
+        self.installed_tree.tag_configure("green", foreground=_theme_color("#a6e3a1"))
+        self.installed_tree.tag_configure("red", foreground=_theme_color("#f38ba8"))
+        self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
         for c in cols:
             self.installed_tree.heading(c, text=c)
             if c not in ("Текущая", "Последняя"):
@@ -1480,7 +1778,7 @@ class ZI_Ops:
 
         self.plugins_container = ttk.Frame(self.plugins_canvas)
         self.plugins_canvas.create_window((0, 0), window=self.plugins_container, anchor="nw")
-        self.plugins_container.bind("<Configure>", lambda e: self.plugins_canvas.configure(scrollregion=self.plugins_canvas.bbox("all")))
+        self.plugins_container.bind("<Configure>", lambda e: self._schedule_canvas_layout(self.plugins_canvas, region=True))
 
         self.plugin_rows = []
 
@@ -1623,15 +1921,12 @@ class ZI_Ops:
         self.plugins_progress["value"] = 0
         self.installed_tree.delete(*self.installed_tree.get_children())
         self._installed_item_keys.clear()
+        self._installed_filename_items.clear()
         self.plugins_log.config(state="normal")
         self.plugins_log.delete("1.0", "end")
         self.plugins_log.config(state="disabled")
 
-        threading.Thread(
-            target=self._check_plugins_worker,
-            args=(base, remote_folder, rows, ftp_cfg),
-            daemon=True
-        ).start()
+        self._submit_background(self._check_plugins_worker, (base, remote_folder, rows, ftp_cfg))
 
     def _validate_plugin_url(self, url):
         """Проверяет URL без предположения, что сервер поддерживает HEAD."""
@@ -1696,14 +1991,24 @@ class ZI_Ops:
         lbl_test = ttk.Label(f1b, text="", foreground=_theme_color("#a6e3a1"))
         lbl_test.pack(side="left", padx=(180, 0))
         def test_url():
-            lbl_test.config(text="⏳ Проверка...", foreground=_theme_color("#89dceb"))
-            dlg.update()
-            ok, msg = self._validate_plugin_url(url_var.get().strip())
-            if ok:
-                lbl_test.config(text=f"✅ {msg}", foreground=_theme_color("#a6e3a1"))
-            else:
-                lbl_test.config(text=f"❌ {msg}", foreground=_theme_color("#f38ba8"))
-        ttk.Button(f1b, text="🧪 Проверить URL", command=test_url).pack(side="right")
+            url = url_var.get().strip()
+            test_button.configure(state="disabled")
+            lbl_test.configure(text="⏳ Проверка...", foreground=_theme_color("#89dceb"))
+            def finish(ok, message):
+                if not dlg.winfo_exists():
+                    return
+                test_button.configure(state="normal")
+                if url_var.get().strip() != url:
+                    lbl_test.configure(text="Ссылка изменена — проверь её ещё раз.")
+                    return
+                lbl_test.configure(text=f"{'✅' if ok else '❌'} {message}",
+                                   foreground=_theme_color("#a6e3a1" if ok else "#f38ba8"))
+            def worker():
+                ok, message = self._validate_plugin_url(url)
+                self._ui_after(0, finish, ok, message)
+            self._submit_background(worker)
+        test_button = ttk.Button(f1b, text="🧪 Проверить URL", command=test_url)
+        test_button.pack(side="right")
 
         # Page
         f2 = ttk.Frame(dlg); f2.pack(fill="x", padx=12, pady=4)
@@ -1764,40 +2069,22 @@ class ZI_Ops:
     def _check_plugins_worker(self, base, remote_folder, rows, ftp_cfg):
         ftp = None
         temp_dir = tempfile.mkdtemp(prefix="ziops_check_")
-        try:
-            ftp = self.ftp_connect(self.plugins_log, ftp_cfg)
-            if not ftp:
-                return
-            self._check_worker_ftp = ftp
+        pending = queue.Queue()
+        consumer = None
+        counts = {"cached": 0, "downloaded": 0, "finished": 0}
+        total = 0
+        latest_cache = {}
+        started = time.monotonic()
+        if hasattr(self, "_network_metrics_lock"):
+            with self._network_metrics_lock:
+                self._network_metrics = {"started": started, "groups": {}}
 
-            folder = self._remote_path(base, remote_folder)
-            ftp.cwd(folder)
-            files = []
-            ftp.retrlines("NLST", files.append)
-            cs_files = sorted({self._remote_basename(f) for f in files if self._remote_basename(f).lower().endswith(".cs")})
-            self.log(self.plugins_log, f"Найдено плагинов: {len(cs_files)}", "cyan")
-
-            total = len(cs_files)
-            latest_cache = {}
-            for i, filename in enumerate(cs_files, 1):
-                if self.stop_event.is_set():
-                    self.log(self.plugins_log, "⏹ Проверка остановлена.", "yellow")
-                    break
-                local_path = os.path.join(temp_dir, f"{i}_{filename}")
+        def check_pages():
+            def process_entry(entry):
+                filename, name, author, version = entry
                 latest_version, status, status_tag = "?", "❓", "yellow"
                 try:
-                    download_ok = self._ftp_download_with_retry(
-                        ftp, folder, filename, local_path, self.plugins_log, ftp_cfg
-                    )
-                    if not download_ok:
-                        raise RuntimeError("FTP download failed after retrying 425/data connection")
-                    with open(local_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content_file = f.read()
-
-                    name, author, version = self._parse_plugin_info(content_file, filename)
-                    version = self._normalize_version(version)
                     base_name = os.path.splitext(filename)[0].lower()
-
                     matched = next((r for r in rows if r["name"] in (base_name, self._plugin_key(name)) or r["remote"] == filename.lower()), None)
                     if matched and matched["page"]:
                         page_key = matched["page"].strip()
@@ -1805,48 +2092,184 @@ class ZI_Ops:
                             latest_cache[page_key] = self._fetch_latest_version_cached(page_key, self.plugins_log)
                         latest_version = self._normalize_version(latest_cache[page_key])
                         if latest_version != "?":
-                            cmp = self._compare_versions(latest_version, version)
-                            if cmp is not None and cmp > 0:
+                            comparison = self._compare_versions(latest_version, version)
+                            if comparison is not None and comparison > 0:
                                 status, status_tag = "⚠️ Обновление", "red"
-                            elif cmp == 0:
+                            elif comparison == 0:
                                 status, status_tag = "✅ Актуально", "green"
-                            elif cmp is not None and cmp < 0:
+                            elif comparison is not None and comparison < 0:
                                 status, status_tag = "ℹ️ На сервере новее", "yellow"
-
-                    if not matched or not matched["page"]:
+                    else:
                         self.log(self.plugins_log, f"Нет страницы версии для {filename}. Добавь ссылку в «Страница версии» списка плагинов.", "yellow")
                     if version == "?":
                         self.log(self.plugins_log, f"Не удалось прочитать Info из {filename}; файл может быть обфусцирован или иметь другой формат.", "yellow")
-                    self.root.after(0, lambda fn=filename,n=name,a=author,v=version,lv=latest_version,st=status,tg=status_tag:
+                    self._ui_after(0, lambda fn=filename,n=name,a=author,v=version,lv=latest_version,st=status,tg=status_tag:
                         self._insert_plugin_row(fn,n,a,v,lv,st,tg))
                     self.log(self.plugins_log, f"{status} {name} | Установлено: {version} | Последняя: {latest_version}",
-                             "green" if status=="✅ Актуально" else "red" if status=="⚠️ Обновление" else "yellow")
-                except Exception as e:
-                    self.log(self.plugins_log, f"❌ Ошибка {filename}: {e}", "red")
+                             "green" if status == "✅ Актуально" else "red" if status == "⚠️ Обновление" else "yellow")
+                except Exception as error:
+                    self.log(self.plugins_log, f"❌ Ошибка страницы {filename}: {error}", "red")
+
+            site_queues = {}
+            site_workers = []
+            active_slots = threading.Semaphore(4)
+            completed_lock = threading.Lock()
+            rows_by_file = {row["remote"]: row for row in rows}
+
+            def site_worker(site_queue):
+                try:
+                    while True:
+                        entry = site_queue.get()
+                        if entry is None:
+                            return
+                        if self.stop_event.is_set():
+                            continue
+                        with active_slots:
+                            if self.stop_event.is_set():
+                                continue
+                            process_entry(entry)
+                        with completed_lock:
+                            counts["finished"] += 1
+                            finished = counts["finished"]
+                        self._set_progress(self.plugins_progress, self.plugins_status_var,
+                                           finished / max(total, 1) * 100, f"Проверено: {finished}/{total}")
+                finally:
+                    transport = getattr(self, "_http_transport", None)
+                    if transport is not None:
+                        transport.close_thread()
+
+            # Only uMod waits for its bulk catalog; other sites can start immediately.
+            umod_queue = queue.Queue()
+            site_queues["umod.org"] = umod_queue
+            def umod_worker():
+                try:
+                    self._prime_umod_version_cache(rows, self.plugins_log)
+                except Exception as error:
+                    self.log(self.plugins_log, f"Каталог недоступен, проверяем страницы отдельно: {error}", "yellow")
+                site_worker(umod_queue)
+            thread = threading.Thread(target=umod_worker, daemon=True, name="versions-umod")
+            site_workers.append(thread)
+            thread.start()
+            while True:
+                entry = pending.get()
+                if entry is None:
+                    break
+                if self.stop_event.is_set():
+                    continue
+                filename, name, _, _ = entry
+                matched = rows_by_file.get(filename.lower()) or next((row for row in rows
+                    if row["name"] in (self._plugin_key(filename), self._plugin_key(name))), None)
+                page = matched["page"] if matched else ""
+                host = (urllib.parse.urlsplit(page).hostname or "local").lower()
+                if host in ("www.umod.org", "umod.org"):
+                    host = "umod.org"
+                elif host in ("www.github.com", "github.com", "api.github.com"):
+                    host = "api.github.com"
+                if host not in site_queues:
+                    site_queue = queue.Queue()
+                    site_queues[host] = site_queue
+                    thread = threading.Thread(target=site_worker, args=(site_queue,), daemon=True, name="versions-" + host)
+                    site_workers.append(thread)
+                    thread.start()
+                site_queues[host].put(entry)
+            for site_queue in site_queues.values():
+                site_queue.put(None)
+            for thread in site_workers:
+                thread.join()
+
+        try:
+            ftp = self.ftp_connect(self.plugins_log, ftp_cfg)
+            if not ftp:
+                return
+            self._check_worker_ftp = ftp
+            folder = self._remote_path(base, remote_folder)
+            ftp.cwd(folder)
+            signatures = {}
+            try:
+                listing = list(ftp.mlsd(facts=["type", "size", "modify"]))
+                files = []
+                for filename, facts in listing:
+                    if facts.get("type") in ("dir", "cdir", "pdir"):
+                        continue
+                    filename = self._remote_basename(filename)
+                    files.append(filename)
+                    # Reuse installed Info only when the server confirms both metadata fields.
+                    if facts.get("size") and facts.get("modify"):
+                        signatures[filename] = (facts["size"], facts["modify"])
+            except (ftplib.error_perm, ftplib.error_reply, AttributeError, NotImplementedError):
+                files = []
+                ftp.retrlines("NLST", files.append)
+            cs_files = sorted({self._remote_basename(f) for f in files if self._remote_basename(f).lower().endswith(".cs")})
+            total = len(cs_files)
+            self.log(self.plugins_log, f"Найдено плагинов: {total}. FTP и страницы проверяются параллельно.", "cyan")
+            server_key = tuple(str(ftp_cfg.get(key, "")) for key in ("host", "port", "user", "use_ftps")) + (folder,)
+            current_keys = {server_key + (name,) for name in cs_files}
+            for key in list(self._installed_info_cache):
+                if key[:-1] == server_key and key not in current_keys:
+                    del self._installed_info_cache[key]
+            consumer = threading.Thread(target=check_pages, daemon=True, name="plugin-version-pages")
+            consumer.start()
+            for index, filename in enumerate(cs_files, 1):
+                if self.stop_event.is_set():
+                    break
+                cache_key = server_key + (filename,)
+                signature = signatures.get(filename)
+                cached = self._installed_info_cache.get(cache_key)
+                local_path = os.path.join(temp_dir, f"{index}_{filename}")
+                try:
+                    if signature is not None and cached and cached[0] == signature:
+                        name, author, version = cached[1]
+                        counts["cached"] += 1
+                    else:
+                        if not self._ftp_download_with_retry(ftp, folder, filename, local_path, self.plugins_log, ftp_cfg):
+                            raise RuntimeError("FTP download failed after retrying")
+                        with open(local_path, "r", encoding="utf-8", errors="ignore") as handle:
+                            name, author, version = self._parse_plugin_info(handle.read(), filename)
+                        version = self._normalize_version(version)
+                        counts["downloaded"] += 1
+                        if signature is not None and version != "?":
+                            self._installed_info_cache[cache_key] = (signature, (name, author, version))
+                        else:
+                            self._installed_info_cache.pop(cache_key, None)
+                    pending.put((filename, name, author, version))
+                except Exception as error:
+                    self._installed_info_cache.pop(cache_key, None)
+                    self.log(self.plugins_log, f"❌ Ошибка {filename}: {error}", "red")
                 finally:
                     ftp = getattr(self, "_check_worker_ftp", ftp)
-                    try: os.remove(local_path)
-                    except OSError: pass
-
-                pct = i / max(total, 1) * 100
-                self._set_progress(self.plugins_progress, self.plugins_status_var, pct, f"{int(pct)}%")
-
-            self.log(self.plugins_log, "\n✅ Проверка завершена.", "green")
-        except Exception as e:
-            self.log(self.plugins_log, f"❌ Ошибка проверки плагинов: {e}", "red")
+                    try:
+                        os.remove(local_path)
+                    except OSError:
+                        pass
+        except Exception as error:
+            self.log(self.plugins_log, f"❌ Ошибка проверки плагинов: {error}", "red")
         finally:
             if ftp:
-                try: ftp.quit()
+                try:
+                    ftp.quit()
                 except Exception:
-                    try: ftp.close()
-                    except Exception: pass
-            try: os.rmdir(temp_dir)
-            except OSError: pass
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
+            ftp_finished = time.monotonic() - started
+            pending.put(None)
+            if consumer:
+                consumer.join()
             try:
-                del self._check_worker_ftp
-            except AttributeError:
+                os.rmdir(temp_dir)
+            except OSError:
                 pass
-            self.root.after(0, self._plugins_done)
+            if hasattr(self, "_check_worker_ftp"):
+                del self._check_worker_ftp
+            if self.stop_event.is_set():
+                self.log(self.plugins_log, "⏹ Проверка остановлена.", "yellow")
+            else:
+                elapsed = time.monotonic() - started
+                self.log(self.plugins_log, f"Проверка завершена за {elapsed:.1f} сек. Из кэша: {counts['cached']}; скачано файлов: {counts['downloaded']}.", "green")
+            if hasattr(self, "_network_metrics_lock"):
+                self._log_network_metrics(ftp_finished)
+            self._ui_after(0, self._plugins_done)
 
     def _parse_plugin_info(self, text, filename):
         name = os.path.splitext(filename)[0]
@@ -1922,8 +2345,9 @@ class ZI_Ops:
 
         items = sorted(self.installed_tree.get_children(), key=key,
                        reverse=self._installed_sort_reverse)
-        for index, item in enumerate(items):
-            self.installed_tree.move(item, "", index)
+        if tuple(items) != self.installed_tree.get_children():
+            for index, item in enumerate(items):
+                self.installed_tree.move(item, "", index)
         for name in ("Файл", "Название", "Автор", "Кастомный", "Статус"):
             arrow = (" ▼" if self._installed_sort_reverse else " ▲") if name == column else ""
             self.installed_tree.heading(name, text=name + arrow)
@@ -1963,40 +2387,167 @@ class ZI_Ops:
             # После перезапуска мог сохраниться только один вариант имени — синхронизируем оба.
             self.custom_plugins.update(keys)
         custom_mark = "☑" if is_custom else "☐"
-        item = self.installed_tree.insert("", "end", values=(filename, name, author, version, latest, custom_mark, status))
+        values = (filename, name, author, version, latest, custom_mark, status)
+        item = self._installed_filename_items.get(filename)
+        if item is not None and not self.installed_tree.exists(item):
+            item = None
+        if item is None:
+            item = self.installed_tree.insert("", "end", values=values)
+        else:
+            self.installed_tree.item(item, values=values)
         self._installed_item_keys[item] = keys
+        self._installed_filename_items[filename] = item
         self.installed_tree.item(item, tags=(tag,))
-        self.installed_tree.tag_configure("green", foreground=_theme_color("#a6e3a1"))
-        self.installed_tree.tag_configure("red", foreground=_theme_color("#f38ba8"))
-        self.installed_tree.tag_configure("yellow", foreground=_theme_color("#f9e2af"))
-        self._apply_installed_plugins_sort()
+        self._request_installed_sort()
+
+    @staticmethod
+    def _umod_slug(page_url):
+        parts = urllib.parse.urlsplit(page_url.strip())
+        if (parts.hostname or "").lower() not in ("umod.org", "www.umod.org"):
+            return None
+        match = re.fullmatch(r"/plugins/([A-Za-z0-9_-]+)/?", parts.path)
+        return match.group(1).lower() if match else None
+
+    def _prime_umod_version_cache(self, rows, log_widget=None):
+        targets = {}
+        for row in rows:
+            url = row.get("page", "").strip()
+            slug = self._umod_slug(url)
+            if slug and url not in self._plugin_version_cache:
+                targets.setdefault(slug, []).append(url)
+        # Small lists are cheaper to query individually. Avoid crawling the full catalog.
+        if len(targets) < 10:
+            return
+        queries = []
+        groups = {}
+        for slug in targets:
+            for token in set(slug.split("-")):
+                if len(token) >= 4:
+                    groups.setdefault(token, set()).add(slug)
+        for token, members in sorted(groups.items(), key=lambda item: -len(item[1])):
+            if len(members) >= 3 and not any(members <= old for _, old in queries):
+                queries.append((token, members))
+        # Popular catalog pages often include several installed plugins at once.
+        queries.extend(("", set(targets)) for _ in range(2))
+        request_budget = min(5, max(1, len(targets) // 10))
+        requests = 0
+        covered = 0
+        popular_page = 0
+        for query, members in queries:
+            missing = {slug for slug in members if any(url not in self._plugin_version_cache for url in targets[slug])}
+            if requests >= request_budget or self.stop_event.is_set():
+                break
+            if len(missing) < (3 if query else 10):
+                continue
+            if not query:
+                popular_page += 1
+            params = urllib.parse.urlencode({"query": query, "page": 1 if query else popular_page,
+                                            "sort": "downloads", "sortdir": "desc"})
+            request = urllib.request.Request("https://umod.org/plugins/search.json?" + params,
+                        headers={"User-Agent": "ZI-Ops", "Accept": "application/json"})
+            requests += 1
+            try:
+                # Bulk probing has one attempt; normal per-plugin fallback retains retries.
+                with self._open_version_response(request, timeout=10, attempts=1) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                entries = payload.get("data") if isinstance(payload, dict) else None
+                if not isinstance(entries, list):
+                    break
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    slug = str(entry.get("slug", "")).lower()
+                    version = self._normalize_version(entry.get("latest_release_version", ""))
+                    if slug in targets and version != "?":
+                        for url in targets[slug]:
+                            if url not in self._plugin_version_cache:
+                                self._plugin_version_cache[url] = version
+                                covered += 1
+            except Exception:
+                break
+        if log_widget is not None and requests:
+            self.log(log_widget, f"Каталог uMod: {covered} версий получено за {requests} пакетных запросов; остальные проверяются отдельно.", "cyan")
 
     def _fetch_latest_version_cached(self, page_url, log_widget=None):
         key = page_url.strip()
         cached = self._plugin_version_cache.get(key)
-        if cached and time.monotonic() < cached[0]:
-            return cached[1]
+        if cached is not None:
+            return cached
         version = self._normalize_version(self._fetch_latest_version(key, log_widget))
-        self._plugin_version_cache[key] = (time.monotonic() + (300 if version != "?" else 60), version)
+        # Failed checks remain retryable; successful results live until application exit.
+        if version != "?" and not self._closing:
+            self._plugin_version_cache[key] = version
         return version
 
-    def _open_version_response(self, request, timeout=15):
+    def _network_metric(self, group, **values):
+        lock = getattr(self, "_network_metrics_lock", None)
+        if lock is None:
+            return
+        with lock:
+            metrics = self._network_metrics
+            if metrics is None:
+                return
+            entry = metrics["groups"].setdefault(group, {})
+            for key, value in values.items():
+                entry[key] = entry.get(key, 0) + value
+            if values.get("requests"):
+                entry["last_response"] = time.monotonic() - metrics["started"]
+
+    def _log_network_metrics(self, ftp_finished):
+        with self._network_metrics_lock:
+            metrics = self._network_metrics
+            self._network_metrics = None
+        if metrics is None:
+            return
+        groups = metrics["groups"]
+        ftp = groups.pop("FTP", {})
+        self.log(self.plugins_log, "── Время проверки сети ──", "cyan")
+        self.log(self.plugins_log, f"FTP: передано {self._format_file_size(ftp.get('bytes', 0))}; "
+                 f"передача файлов — {ftp.get('seconds', 0):.1f} сек.; "
+                 f"попыток передачи — {int(ftp.get('attempts', 0))}. "
+                 f"FTP-этап завершён на {ftp_finished:.1f} сек.")
+        last_http = 0
+        for host, entry in sorted(groups.items()):
+            last_http = max(last_http, entry.get("last_response", 0))
+            self.log(self.plugins_log, f"HTTP {host}: запросов — {int(entry.get('requests', 0))}; "
+                     f"получение ответов — {entry.get('seconds', 0):.1f} сек.; "
+                     f"паузы между запросами — {entry.get('wait', 0):.1f} сек.; "
+                     f"ожидание повторов — {entry.get('retry_wait', 0):.1f} сек.; "
+                     f"ошибок — {int(entry.get('errors', 0))}.")
+        if groups:
+            self.log(self.plugins_log, f"Последний HTTP-запрос завершён на {last_http:.1f} сек.")
+        else:
+            self.log(self.plugins_log, "HTTP-запросы не выполнялись.")
+        self.log(self.plugins_log, "FTP и сайты работают параллельно. Времена отдельных этапов не складываются.", "cyan")
+
+    def _open_version_response(self, request, timeout=15, attempts=10):
         """Space requests per host and honor rate limits for version checks and downloads."""
         host = (urllib.parse.urlsplit(request.full_url).hostname or "").lower()
-        interval = 3.0 if host == "umod.org" or host.endswith(".umod.org") else 2.0
-        for attempt in range(1, 11):
+        is_umod = host == "umod.org" or host.endswith(".umod.org")
+        for attempt in range(1, attempts + 1):
             if self.stop_event.is_set():
                 raise RuntimeError("Операция остановлена")
             with self._http_rate_lock:
                 now = time.monotonic()
                 if self._http_blocked_until.get(host, 0) > now:
                     raise RuntimeError(f"{host}: запросы временно приостановлены после HTTP 429; повторите позже")
+                interval = self._http_adaptive_intervals.get(host, 2.0)
                 scheduled = max(now, self._http_next_request.get(host, 0))
                 self._http_next_request[host] = scheduled + interval
-            if self.stop_event.wait(max(0, scheduled - now)):
+            wait_started = time.monotonic()
+            cancelled = self.stop_event.wait(max(0, scheduled - now))
+            self._network_metric(host, wait=time.monotonic() - wait_started)
+            if cancelled:
                 raise RuntimeError("Операция остановлена")
             try:
-                return urllib.request.urlopen(request, timeout=timeout)
+                request_started = time.monotonic()
+                try:
+                    return self._http_transport.open(request, timeout)
+                except Exception:
+                    self._network_metric(host, errors=1)
+                    raise
+                finally:
+                    self._network_metric(host, requests=1, seconds=time.monotonic() - request_started)
             except urllib.error.HTTPError as exc:
                 if exc.code not in (408, 429, 500, 502, 503, 504):
                     exc.close()
@@ -2013,20 +2564,29 @@ class ZI_Ops:
                         pass
                 code = exc.code
                 exc.close()
+                if code == 429 and is_umod:
+                    with self._http_rate_lock:
+                        current_interval = self._http_adaptive_intervals.get(host, 2.0)
+                        next_interval = 3.0
+                        self._http_adaptive_intervals[host] = next_interval
+                    self.log(self.plugins_log, f"{host}: HTTP 429 — интервал увеличен до {next_interval:g} сек. до закрытия программы.", "yellow")
                 with self._http_rate_lock:
                     self._http_next_request[host] = max(self._http_next_request.get(host, 0), time.monotonic() + delay)
                     if code == 429 and attempt == 10:
                         self._http_blocked_until[host] = time.monotonic() + max(300, delay)
-                if attempt == 10:
+                if attempt == attempts:
                     raise
                 reason = "HTTP 429: слишком много запросов" if code == 429 else f"HTTP {code}"
             except (urllib.error.URLError, TimeoutError, OSError):
-                if attempt == 10:
+                if attempt == attempts:
                     raise
                 delay = min(120, 5 * 2 ** min(attempt - 1, 5))
                 reason = "временная ошибка сети"
-            self.log(self.plugins_log, f"{host}: {reason}. Попытка {attempt + 1}/10 через {int(delay)} сек.", "yellow")
-            if self.stop_event.wait(delay):
+            self.log(self.plugins_log, f"{host}: {reason}. Попытка {attempt + 1}/{attempts} через {int(delay)} сек.", "yellow")
+            wait_started = time.monotonic()
+            cancelled = self.stop_event.wait(delay)
+            self._network_metric(host, retry_wait=time.monotonic() - wait_started)
+            if cancelled:
                 raise RuntimeError("Операция остановлена")
 
     @staticmethod
@@ -2352,7 +2912,7 @@ class ZI_Ops:
         self.plugins_log.config(state="disabled")
         base = self.base_var.get().strip()
         ftp_cfg = self._snapshot_ftp_config()
-        threading.Thread(target=self._update_plugins_worker, args=(rows, base, ftp_cfg), daemon=True, name="plugin-update-worker").start()
+        self._submit_background(self._update_plugins_worker, (rows, base, ftp_cfg))
 
     def _update_plugins_worker(self, rows, base, ftp_cfg):
         ftp = None
@@ -2404,7 +2964,7 @@ class ZI_Ops:
                         self.log(self.plugins_log, f"⏭ {name}: {reason} ({installed_version} / {latest}).", "yellow" if comparison is None else "green")
                         continue
                     self.log(self.plugins_log, f"Скачивание {name}: {installed_version} → {latest}", "cyan")
-                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.2.0", "Accept": "text/plain,application/octet-stream,*/*"})
+                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.3.0", "Accept": "text/plain,application/octet-stream,*/*"})
                     with self._open_version_response(req, timeout=45) as resp:
                         data = resp.read()
                     if not data or re.search(br"<(?:!doctype\s+html|html|body)\b", data[:4096], re.I):
@@ -2448,7 +3008,7 @@ class ZI_Ops:
             try: os.rmdir(temp_dir)
             except OSError: pass
             self.__dict__.pop("_check_worker_ftp", None)
-            self.root.after(0, self._plugins_done)
+            self._ui_after(0, self._plugins_done)
 
     def _save_custom_plugin(self, filename, version, data):
         folder = os.path.join(self.script_dir, "Custom")
@@ -2475,6 +3035,7 @@ class ZI_Ops:
                 index += 1
 
     def _plugins_done(self):
+        self._flush_ui_updates()
         with self.running_lock:
             self._running = False
         self.plugins_status_var.set("Готов")
@@ -2491,14 +3052,20 @@ class ZI_Ops:
         self.settings_content = ttk.Frame(self.settings_canvas)
         settings_window = self.settings_canvas.create_window((0, 0), window=self.settings_content, anchor="nw")
         self.settings_content.bind("<Configure>", lambda event:
-            self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox("all")))
+            self._schedule_canvas_layout(self.settings_canvas, region=True))
         self.settings_canvas.bind("<Configure>", lambda event:
-            self.settings_canvas.itemconfigure(settings_window, width=event.width))
+            self._schedule_canvas_layout(self.settings_canvas, settings_window, event.width))
         theme_frame = ttk.LabelFrame(self.settings_content, text=" Оформление ", padding=10)
         theme_frame.pack(fill="x", padx=10, pady=(10, 5))
         self.theme_button = ttk.Button(theme_frame, text="Тема: тёмная", command=self.toggle_theme)
         self.theme_button.pack(side="left")
         ttk.Label(theme_frame, text="Нажми, чтобы переключить светлую и тёмную тему.").pack(side="left", padx=10)
+        performance = ttk.LabelFrame(self.settings_content, text=" Производительность — автоматический режим ", padding=10)
+        performance.pack(fill="x", padx=10, pady=5)
+        ttk.Label(performance, text=f"Доступно логических процессоров: {self._available_cpus}  •  Фоновых исполнителей: {self._background_limit}").pack(anchor="w")
+        ttk.Label(performance, text="Параллелизм подбирается при запуске с запасом для интерфейса и системы. "
+                  "RCON и Query работают отдельно; FTP и сайты сохраняют ограничения запросов.", wraplength=760).pack(anchor="w", pady=(5, 0))
+        ttk.Label(performance, text="Распределением потоков по ядрам управляет операционная система.").pack(anchor="w", pady=(4, 0))
         ftp_frame = ttk.LabelFrame(self.settings_content, text=" FTP Настройки ", padding=10)
         ftp_frame.pack(fill="x", padx=10, pady=(10, 5))
         Tooltip(ftp_frame, "Настройки подключения к FTP-серверу хостинга. Данные берутся из панели управления хостингом.")
@@ -2656,23 +3223,23 @@ class ZI_Ops:
         def worker():
             try:
                 api = RustMapsAPI(api_key)
-                self.root.after(0, lambda: self.log(log_widget, f"🌐 Проверка seed {seed} (размер {size}) на RustMaps...", "cyan"))
+                self._ui_after(0, lambda: self.log(log_widget, f"🌐 Проверка seed {seed} (размер {size}) на RustMaps...", "cyan"))
                 result = api.get_map_by_seed(size, seed)
                 data = result.get("data", {}) if isinstance(result, dict) else {}
                 state = data.get("state", "Unknown")
                 preview = data.get("previewBaseUrl", "")
-                self.root.after(0, lambda st=state: self.log(log_widget, f"✅ Карта найдена. Статус: {st}", "green"))
+                self._ui_after(0, lambda st=state: self.log(log_widget, f"✅ Карта найдена. Статус: {st}", "green"))
                 if preview:
-                    self.root.after(0, lambda p=preview: self.log(log_widget, f"   Preview: {p}", "cyan"))
+                    self._ui_after(0, lambda p=preview: self.log(log_widget, f"   Preview: {p}", "cyan"))
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    self.root.after(0, lambda: self.log(log_widget, f"❌ Карты нет на RustMaps (seed={seed}, size={size})", "red"))
+                    self._ui_after(0, lambda: self.log(log_widget, f"❌ Карты нет на RustMaps (seed={seed}, size={size})", "red"))
                 else:
                     body = e.read().decode("utf-8", errors="ignore")
-                    self.root.after(0, lambda c=e.code,b=body: self.log(log_widget, f"❌ API: HTTP {c} — {b[:200]}", "red"))
+                    self._ui_after(0, lambda c=e.code,b=body: self.log(log_widget, f"❌ API: HTTP {c} — {b[:200]}", "red"))
             except Exception as e:
-                self.root.after(0, lambda err=e: self.log(log_widget, f"❌ Ошибка: {err}", "red"))
-        threading.Thread(target=worker, daemon=True, name="rustmaps-check").start()
+                self._ui_after(0, lambda err=e: self.log(log_widget, f"❌ Ошибка: {err}", "red"))
+        self._submit_background(worker, ())
 
     def generate_via_rustmaps(self, seed_var, size_var, log_widget):
         api_key = self.api_key_var.get().strip()
@@ -2698,18 +3265,18 @@ class ZI_Ops:
                 data = result.get("data", result) if isinstance(result, dict) else {}
                 map_id = data.get("id") or data.get("mapId") or data.get("map_id") or ""
                 state = data.get("state", "Unknown")
-                self.root.after(0, lambda s=str(used_seed): seed_var.set(s))
-                self.root.after(0, lambda sc=status_code, st=state:
+                self._ui_after(0, lambda s=str(used_seed): seed_var.set(s))
+                self._ui_after(0, lambda sc=status_code, st=state:
                     self.log(log_widget, f"✅ RustMaps принял запрос (HTTP {sc}). Статус: {st}", "green"))
                 if map_id:
-                    self.root.after(0, lambda mid=map_id:
+                    self._ui_after(0, lambda mid=map_id:
                         self.log(log_widget, f"🗺️ ID карты: {mid}", "cyan"))
-                self.root.after(0, lambda:
+                self._ui_after(0, lambda:
                     self.log(log_widget, "ℹ️ API не предоставляет процент генерации — прогресс-бар здесь намеренно не используется.", "yellow"))
             except Exception as e:
-                self.root.after(0, lambda err=e: self.log(log_widget, f"❌ RustMaps: {err}", "red"))
+                self._ui_after(0, lambda err=e: self.log(log_widget, f"❌ RustMaps: {err}", "red"))
 
-        threading.Thread(target=worker, daemon=True, name="rustmaps-generate").start()
+        self._submit_background(worker, ())
 
     def preview_cfg_template(self):
         path = self.wipe_cfg_template_var.get().strip()
@@ -2820,11 +3387,35 @@ class ZI_Ops:
             messagebox.showerror("FTP", "Недопустимый базовый путь.")
             return
         text = self._show_operation_preview(self.tab_settings, "Проверка FTP",
-            ["Проверяем подключение и содержимое базовой папки: " + base])
+            ["Проверка доступа к папке сервера", "Путь: " + base])
         self._ftp_check_running = True
         self.ftp_test_button.configure(state="disabled")
-        threading.Thread(target=self._test_ftp_worker, args=(cfg, base, text), daemon=True,
-                         name="ftp-test-worker").start()
+        self._submit_background(self._test_ftp_worker, (cfg, base, text))
+
+    @staticmethod
+    def _format_file_size(value):
+        try:
+            size = int(value)
+        except (TypeError, ValueError):
+            return ""
+        if size < 0:
+            return ""
+        for unit in ("Б", "КиБ", "МиБ", "ГиБ", "ТиБ"):
+            if size < 1024 or unit == "ТиБ":
+                return f"{int(size)} {unit}" if unit == "Б" else f"{size:.1f} {unit}"
+            size /= 1024
+
+    @staticmethod
+    def _parse_ftp_list_entry(line):
+        parts = line.split(None, 8)
+        if len(parts) == 9 and parts[0][0] in "d-l" and parts[4].isdigit():
+            return parts[8], parts[0].startswith("d"), parts[4]
+        match = re.match(r"^\S+\s+\S+\s+(<DIR>|\d+)\s+(.+)$", line, re.I)
+        if match:
+            size, name = match.groups()
+            return name, size.upper() == "<DIR>", None if size.upper() == "<DIR>" else size
+        # Unknown listing style is displayed intact; no guessed file metadata.
+        return line, False, None
 
     def _test_ftp_worker(self, cfg, base, text):
         ftp = None
@@ -2834,14 +3425,29 @@ class ZI_Ops:
                 return
             ftp.cwd(base)
             self.log(text, "Открытая папка: " + ftp.pwd(), "cyan")
-            names = []
-            ftp.retrlines("LIST", names.append)
-            self.log(text, "Содержимое папки:", "cyan")
-            for name in names:
-                self.log(text, name)
-            if not names:
+            entries = []
+            try:
+                for name, facts in ftp.mlsd(facts=["type", "size"]):
+                    if facts.get("type") in ("cdir", "pdir"):
+                        continue
+                    entries.append((name, facts.get("type") == "dir", facts.get("size")))
+            except (ftplib.error_perm, ftplib.error_reply, AttributeError, NotImplementedError):
+                raw_lines = []
+                ftp.retrlines("LIST", raw_lines.append)
+                entries = [self._parse_ftp_list_entry(line) for line in raw_lines if line.strip() and not line.startswith("total ")]
+            folders = sum(is_folder for _, is_folder, _ in entries)
+            self.log(text, f"Найдено: папок — {folders}, файлов — {len(entries) - folders}.", "cyan")
+            if entries:
+                self.log(text, "Содержимое папки:", "cyan")
+                for name, is_folder, size in sorted(entries, key=lambda item: (not item[1], item[0].casefold())):
+                    if is_folder:
+                        self.log(text, f"  📁 {name}/", "cyan")
+                    else:
+                        readable_size = self._format_file_size(size)
+                        self.log(text, f"  📄 {name}" + (f"  —  {readable_size}" if readable_size else ""))
+            else:
                 self.log(text, "Папка пуста.", "yellow")
-            self.log(text, "Проверка подключения и чтения папки завершена.", "green")
+            self.log(text, "✅ Подключение работает. Указанная папка доступна для чтения.", "green")
         except Exception as exc:
             self.log(text, f"Ошибка проверки FTP: {exc}", "red")
         finally:
@@ -2850,7 +3456,7 @@ class ZI_Ops:
                 except Exception:
                     try: ftp.close()
                     except Exception: pass
-            self.root.after(0, self._finish_ftp_check)
+            self._ui_after(0, self._finish_ftp_check)
 
     def _finish_ftp_check(self):
         self._ftp_check_running = False
@@ -2915,7 +3521,7 @@ class ZI_Ops:
         self.wipe_stop_btn.config(state="normal")
         self.wipe_progress["value"] = 0
         self.wipe_status_var.set("Подключение...")
-        threading.Thread(target=self._wipe_worker, args=(cfg,), daemon=True, name="wipe-worker").start()
+        self._submit_background(self._wipe_worker, (cfg,))
 
     def _wipe_worker(self, cfg):
         ftp = None
@@ -2959,7 +3565,7 @@ class ZI_Ops:
                 seed = cfg["seed"]
                 if cfg["random_seed"]:
                     seed = str(random.randint(1, RustMapsAPI.MAX_SEED))
-                    self.root.after(0, lambda s=seed: self.wipe_seed_var.set(s))
+                    self._ui_after(0, lambda s=seed: self.wipe_seed_var.set(s))
 
                 cfg_path = cfg["cfg_template"]
                 if cfg_path and os.path.isfile(cfg_path):
@@ -2992,7 +3598,7 @@ class ZI_Ops:
                             except OSError: pass
                 else:
                     # Clipboard is a UI operation; perform it on main thread.
-                    self.root.after(0, lambda s=seed: (self.root.clipboard_clear(), self.root.clipboard_append(s)))
+                    self._ui_after(0, lambda s=seed: (self.root.clipboard_clear(), self.root.clipboard_append(s)))
                     self.log(self.wipe_log, f"📋 Seed скопирован в буфер: {seed}", "cyan")
 
                 done += 1
@@ -3020,7 +3626,7 @@ class ZI_Ops:
                 except Exception:
                     try: ftp.close()
                     except Exception: pass
-            self.root.after(0, self._wipe_done)
+            self._ui_after(0, self._wipe_done)
 
     def _rmdirs(self, ftp, path):
         """Удаляет содержимое папки, сохраняя саму папку."""
@@ -3064,6 +3670,7 @@ class ZI_Ops:
             self.log(self.wipe_log, "⏹ Запрошена остановка. Текущая FTP-операция будет завершена.", "yellow")
 
     def _wipe_done(self):
+        self._flush_ui_updates()
         with self.running_lock:
             self._running = False
         self.stop_requested = False
@@ -3130,7 +3737,7 @@ class ZI_Ops:
         self.stop_event.clear()
         self.judg_progress["value"] = 0
         self.judg_status_var.set("Проверка и резервные копии...")
-        threading.Thread(target=self._judgment_worker, args=(cfg,), daemon=True, name="judgment-worker").start()
+        self._submit_background(self._judgment_worker, (cfg,))
 
     def _judgment_worker(self, cfg):
         ftp, backup_dir = None, None
@@ -3239,9 +3846,10 @@ class ZI_Ops:
                 except Exception:
                     try: ftp.close()
                     except Exception: pass
-            self.root.after(0, lambda ok=success: self._judgment_done(ok))
+            self._ui_after(0, lambda ok=success: self._judgment_done(ok))
 
     def _judgment_done(self, success=False):
+        self._flush_ui_updates()
         with self.running_lock:
             self._running = False
         self.judg_status_var.set("Готов" if success else "Ошибка — смотри лог")
@@ -3286,8 +3894,8 @@ class ZI_Ops:
                 sock = socket.create_connection((host, int(port)), timeout=5)
                 sock.close()
             except socket.timeout:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ Порт недоступен"))
-                self.root.after(0, lambda: self.log(self.rcon_log,
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ Порт недоступен"))
+                self._ui_after(0, lambda: self.log(self.rcon_log,
                     f"❌ Порт {port} не отвечает. Возможные причины:\n"
                     f"   • Указан игровой порт вместо RCON-порта\n"
                     f"   • RCON-порт закрыт файрволом хостинга\n"
@@ -3295,41 +3903,41 @@ class ZI_Ops:
                     f"   Проверь порт RCON в панели хостинга (обычно отличается от игрового)", "red"))
                 return
             except ConnectionRefusedError:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ Соединение отклонено"))
-                self.root.after(0, lambda: self.log(self.rcon_log,
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ Соединение отклонено"))
+                self._ui_after(0, lambda: self.log(self.rcon_log,
                     f"❌ Порт {port} отклонил соединение. Проверь, что сервер запущен и порт открыт.", "red"))
                 return
             except Exception as e:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ Ошибка сети"))
-                self.root.after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка сети: {e}", "red"))
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ Ошибка сети"))
+                self._ui_after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка сети: {e}", "red"))
                 return
 
             # Step 2: Try WebSocket connect
-            self.root.after(0, lambda: self.rcon_conn_status.set("WebSocket..."))
+            self._ui_after(0, lambda: self.rcon_conn_status.set("WebSocket..."))
             scheme = "wss" if use_ssl else "ws"
             full_path = f"{path}/***" if path else "/***"
-            self.root.after(0, lambda: self.log(self.rcon_log,
+            self._ui_after(0, lambda: self.log(self.rcon_log,
                 f"⏳ WebSocket: {scheme}://{host}:{port}{full_path}", "cyan"))
             try:
                 client = RustRCON(host, int(port), password, timeout=10, path=path, ssl=use_ssl)
                 client.connect()
                 with self.rcon_lock:
                     self.rcon_client = client
-                self.root.after(0, lambda: self.rcon_conn_status.set("✅ Подключено"))
-                self.root.after(0, lambda: self.log(self.rcon_log, "✅ Подключено к RCON", "green"))
+                self._ui_after(0, lambda: self.rcon_conn_status.set("✅ Подключено"))
+                self._ui_after(0, lambda: self.log(self.rcon_log, "✅ Подключено к RCON", "green"))
             except websocket.WebSocketTimeoutException:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ Таймаут"))
-                self.root.after(0, lambda: self.log(self.rcon_log,
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ Таймаут"))
+                self._ui_after(0, lambda: self.log(self.rcon_log,
                     "❌ WebSocket таймаут. Порт открыт, но не отвечает по WebSocket.\n"
                     "   Возможно, на этом порту не RCON, а другое приложение.", "red"))
             except websocket.WebSocketBadStatusException as e:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ HTTP ошибка"))
-                self.root.after(0, lambda e=e: self.log(self.rcon_log,
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ HTTP ошибка"))
+                self._ui_after(0, lambda e=e: self.log(self.rcon_log,
                     f"❌ Сервер ответил HTTP ошибкой: {str(e).replace(password, '***')}\n"
                     "   Попробуй указать путь RCON (например /rcon) в настройках.", "red"))
             except Exception as e:
-                self.root.after(0, lambda: self.rcon_conn_status.set("❌ Ошибка"))
-                self.root.after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка подключения: {str(e).replace(password, '***')}", "red"))
+                self._ui_after(0, lambda: self.rcon_conn_status.set("❌ Ошибка"))
+                self._ui_after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка подключения: {str(e).replace(password, '***')}", "red"))
 
         def guarded_connect():
             try:
@@ -3340,9 +3948,11 @@ class ZI_Ops:
 
     def rcon_disconnect(self):
         with self.rcon_lock:
-            if self.rcon_client:
-                self.rcon_client.disconnect()
-                self.rcon_client = None
+            client = self.rcon_client
+            self.rcon_client = None
+        if client:
+            client.connected = False
+            threading.Thread(target=client.disconnect, daemon=True, name="rcon-disconnect").start()
         self.rcon_conn_status.set("Не подключено")
         self.log(self.rcon_log, "🔌 Отключено", "yellow")
 
@@ -3351,14 +3961,14 @@ class ZI_Ops:
             with self.rcon_lock:
                 client = self.rcon_client
             if not client or not client.connected:
-                self.root.after(0, lambda: self.log(self.rcon_log, "❌ Нет подключения", "red"))
+                self._ui_after(0, lambda: self.log(self.rcon_log, "❌ Нет подключения", "red"))
                 return
-            self.root.after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 10 сек)...", "cyan"))
+            self._ui_after(0, lambda: self.log(self.rcon_log, "> status (ожидание ответа 10 сек)...", "cyan"))
             try:
                 result = client.send("status", wait=True, timeout=10)
-                self.root.after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r}", "yellow" if r.startswith("[") else "green"))
+                self._ui_after(0, lambda r=result: self.log(self.rcon_log, f"Ответ: {r}", "yellow" if r.startswith("[") else "green"))
             except Exception as e:
-                self.root.after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка: {e}", "red"))
+                self._ui_after(0, lambda e=e: self.log(self.rcon_log, f"❌ Ошибка: {e}", "red"))
         threading.Thread(target=worker, daemon=True).start()
 
     def rcon_send_command(self, cmd, log_widget=None):
@@ -3368,15 +3978,15 @@ class ZI_Ops:
             with self.rcon_lock:
                 client = self.rcon_client
             if not client or not client.connected:
-                self.root.after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
+                self._ui_after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
                 return
-            self.root.after(0, lambda: self.log(log_widget, f"> {cmd} (ожидание ответа)", "cyan"))
+            self._ui_after(0, lambda: self.log(log_widget, f"> {cmd} (ожидание ответа)", "cyan"))
             try:
                 result = client.send(cmd, wait=True, timeout=10)
                 color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
                 self.log(log_widget, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
             except Exception as e:
-                self.root.after(0, lambda e=e: self.log(log_widget, f"❌ Ошибка: {e}", "red"))
+                self._ui_after(0, lambda e=e: self.log(log_widget, f"❌ Ошибка: {e}", "red"))
         threading.Thread(target=worker, daemon=True).start()
 
     def rcon_full_wipe(self):
@@ -3504,6 +4114,19 @@ class ZI_Ops:
                     pass
 
     def _ftp_download_with_retry(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=10):
+        started = time.monotonic()
+        try:
+            success = self._ftp_download_with_retry_impl(ftp, folder, filename, local_path, log_widget, ftp_cfg, retries)
+            if success:
+                try:
+                    self._network_metric("FTP", bytes=os.path.getsize(local_path))
+                except OSError:
+                    pass
+            return success
+        finally:
+            self._network_metric("FTP", seconds=time.monotonic() - started)
+
+    def _ftp_download_with_retry_impl(self, ftp, folder, filename, local_path, log_widget, ftp_cfg, retries=10):
         """Скачивает файл и восстанавливает FTP data-channel после 425/426.
 
         Некоторые хостинги периодически отклоняют passive data connection с
@@ -3514,6 +4137,7 @@ class ZI_Ops:
         current = ftp
         self._check_worker_ftp = current
         for attempt in range(1, retries + 1):
+            self._network_metric("FTP", attempts=1)
             if self.stop_event.is_set():
                 return False
             if current is None:
@@ -3550,19 +4174,9 @@ class ZI_Ops:
         return False
 
     def log(self, widget, text, color="white"):
-        # tkinter не потокобезопасен: вызовы из рабочих потоков перенаправляем в главный
-        if threading.current_thread() is not threading.main_thread():
-            try:
-                self.root.after(0, lambda w=widget, t=text, c=color: self.log(w, t, c))
-            except Exception:
-                pass
-            return
-        if not widget.winfo_exists():
-            return
-        widget.config(state="normal")
-        widget.insert("end", text + "\n", color)
-        widget.see("end")
-        widget.config(state="disabled")
+        # Workers only enqueue Python data; Tcl is touched in the main thread.
+        if not self._closing:
+            self._log_records.put((widget, str(text), color))
 
     def _config_log_tags(self, widget):
         widget.tag_configure("red", foreground=_theme_color("#f38ba8"))
@@ -3696,14 +4310,20 @@ class ZI_Ops:
 
     def on_close(self):
         self._closing = True
+        self._http_transport.close()
+        self._installed_info_cache.clear()
+        self._plugin_version_cache.clear()
         self._query_cancel.set()
-        for timer in (self._query_after, self._query_poll_after):
+        for timer in self.root.tk.call("after", "info"):
             if timer is not None:
                 self.root.after_cancel(timer)
         self.stop_event.set()
         self.save_config(silent=True)
+        with self._background_condition:
+            self._background_stopping = True
+            self._background_condition.notify_all()
         if self.rcon_client:
-            self.rcon_client.disconnect()
+            threading.Thread(target=self.rcon_client.disconnect, daemon=True).start()
         self.root.destroy()
 
 
