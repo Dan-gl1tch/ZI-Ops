@@ -13,8 +13,8 @@
 #    nuitka-project: --windows-icon-from-ico={MAIN_DIRECTORY}/ZI-Ops.ico
 #    nuitka-project: --company-name=ZI & DanStudio47
 #    nuitka-project: --product-name=ZI-Ops
-#    nuitka-project: --file-version=1.6.4.0
-#    nuitka-project: --product-version=1.6.4.0
+#    nuitka-project: --file-version=1.6.4.2
+#    nuitka-project: --product-version=1.6.4.2
 #    nuitka-project: --file-description=ZI-Ops - Rust Server Management
 #    nuitka-project: --copyright=2026 - danilmine_D47
 
@@ -151,7 +151,7 @@ def detect_background_capacity():
 
 APP_NAME = "ZI-Ops"
 APP_AUTHOR = "danilmine_D47"
-APP_VERSION = "1.6.4.0"
+APP_VERSION = "1.6.4.2"
 # Встроенная публичная ссылка автора; настройки пользователя её не изменяют.
 DONATION_URL = "https://www.donationalerts.com/r/danilmine_"
 UPDATES_URL = "https://t.me/DanStudios47"
@@ -478,6 +478,27 @@ RCON_COMMANDS = (
     ("writecfg", "Сохранить настройки сервера"),
     ("env.time", "Время суток на сервере"),
 )
+
+
+def split_rcon_commands(text):
+    commands = []
+    start = index = 0
+    quoted = False
+    while index < len(text):
+        char = text[index]
+        if quoted and char == "\\" and index + 1 < len(text) and text[index + 1] in ('"', "\\"):
+            index += 2
+            continue
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and text.startswith(";;", index):
+            commands.append(text[start:index].strip())
+            index += 2
+            start = index
+            continue
+        index += 1
+    commands.append(text[start:].strip())
+    return [command for command in commands if command]
 
 
 def rcon_command_matches(text):
@@ -1615,7 +1636,7 @@ class ZI_Ops:
 
         manual_frame = ModernPanel(self.tab_rcon, text=" Ручной ввод ", padding=10)
         manual_frame.pack(fill="x", padx=10, pady=5)
-        Tooltip(manual_frame, "Введи любую RCON-команду вручную и нажми Enter или кнопку Отправить")
+        Tooltip(manual_frame, "Введи RCON-команду или раздели несколько команд через ;; и нажми Enter")
         manual_frame.columnconfigure(0, weight=1)
         self.rcon_cmd_var = tk.StringVar()
         entry = ttk.Entry(manual_frame, textvariable=self.rcon_cmd_var)
@@ -1632,6 +1653,8 @@ class ZI_Ops:
         self._suggest_tree.pack(fill="both", expand=True)
         self.rcon_cmd_var.trace_add("write", self._rcon_update_suggestions)
         entry.bind("<Return>", self._rcon_manual_send)
+        entry.bind("<Control-KeyPress>", self._rcon_entry_shortcut)
+        entry.bind("<Control-BackSpace>", self._rcon_delete_word)
         entry.bind("<Tab>", self._rcon_accept_suggestion)
         entry.bind("<Escape>", self._rcon_hide_suggestions)
         entry.bind("<Down>", lambda event: self._rcon_move_suggestion(1))
@@ -1770,9 +1793,48 @@ class ZI_Ops:
         if not self._closing and self.root.focus_get() not in (self.rcon_cmd_entry, self._suggest_tree):
             self._rcon_hide_suggestions()
 
+    def _rcon_entry_shortcut(self, event):
+        if event.state & (0x8 | 0x20000):
+            return None
+        key = str(event.keysym).lower()
+        if sys.platform == "win32":
+            key = {65: "a", 67: "c", 86: "v", 88: "x"}.get(event.keycode, key)
+        widget = event.widget
+        if key == "a":
+            widget.selection_range(0, "end")
+            return "break"
+        action = {"c": "<<Copy>>", "v": "<<Paste>>", "x": "<<Cut>>"}.get(key)
+        if action:
+            widget.event_generate(action)
+            return "break"
+        return None
+
+    def _rcon_delete_word(self, event):
+        widget = event.widget
+        if widget.selection_present():
+            widget.delete("sel.first", "sel.last")
+        else:
+            end = widget.index("insert")
+            left = widget.get()[:end].rstrip()
+            start = len(left)
+            while start and not left[start - 1].isspace():
+                start -= 1
+            if start < end:
+                widget.delete(start, end)
+        return "break"
+
     def _rcon_manual_send(self, event=None):
         self._rcon_hide_suggestions()
-        self.rcon_send_command(self.rcon_cmd_var.get())
+        commands = split_rcon_commands(self.rcon_cmd_var.get())
+        if getattr(self, "_rcon_batch_running", False):
+            return "break"
+        if commands and self.rcon_client and self.rcon_client.connected:
+            self.rcon_cmd_var.set("")
+        if len(commands) == 1:
+            self.rcon_send_command(commands[0])
+        elif commands:
+            self._rcon_batch_running = True
+            self.rcon_send_command(commands)
         return "break"
 
     def _query_tab_changed(self, event=None):
@@ -3143,7 +3205,7 @@ class ZI_Ops:
                         self.log(self.plugins_log, f"⏭ {name}: {reason} ({installed_version} / {latest}).", "yellow" if comparison is None else "green")
                         continue
                     self.log(self.plugins_log, f"Скачивание {name}: {installed_version} → {latest}", "cyan")
-                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.4.0", "Accept": "text/plain,application/octet-stream,*/*"})
+                    req = urllib.request.Request(url, headers={"User-Agent": "ZI-Ops/1.6.4.2", "Accept": "text/plain,application/octet-stream,*/*"})
                     with self._open_version_response(req, timeout=45) as resp:
                         data = resp.read()
                     if not data or re.search(br"<(?:!doctype\s+html|html|body)\b", data[:4096], re.I):
@@ -4153,19 +4215,33 @@ class ZI_Ops:
     def rcon_send_command(self, cmd, log_widget=None):
         if log_widget is None:
             log_widget = self.rcon_log
+        is_batch = isinstance(cmd, list)
+        commands = cmd if is_batch else [cmd]
+
         def worker():
-            with self.rcon_lock:
-                client = self.rcon_client
-            if not client or not client.connected:
-                self._ui_after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
-                return
-            self._ui_after(0, lambda: self.log(log_widget, f"> {cmd} (ожидание ответа)", "cyan"))
             try:
-                result = client.send(cmd, wait=True, timeout=10)
-                color = "yellow" if result.startswith("[Таймаут") or result == "[Пустой ответ]" else "green"
-                self.log(log_widget, "Ответ: " + (result or "[Сервер ответил без текста]"), color)
+                with self.rcon_lock:
+                    client = self.rcon_client
+                if not client or not client.connected:
+                    self._ui_after(0, lambda: self.log(log_widget, "❌ Нет подключения. Нажми \"Подключиться\" сначала.", "red"))
+                    return
+                total = len(commands)
+                for index, command in enumerate(commands, 1):
+                    prefix = f"[{index}/{total}] " if is_batch else ""
+                    self._ui_after(0, lambda prefix=prefix, command=command: self.log(
+                        log_widget, f"{prefix}> {command} (ожидание ответа)", "cyan"))
+                    result = client.send(command, wait=True, timeout=10)
+                    uncertain = result.startswith("[Таймаут") or result == "[Пустой ответ]"
+                    self.log(log_widget, "Ответ: " + (result or "[Сервер ответил без текста]"), "yellow" if uncertain else "green")
+                    if is_batch and uncertain and index < total:
+                        self.log(log_widget, f"Пакет остановлен: нет подтверждения команды {index}. Не отправлено: {total - index}.", "yellow")
+                        break
             except Exception as e:
                 self._ui_after(0, lambda e=e: self.log(log_widget, f"❌ Ошибка: {e}", "red"))
+            finally:
+                if is_batch:
+                    self._ui_after(0, lambda: setattr(self, "_rcon_batch_running", False))
+
         threading.Thread(target=worker, daemon=True).start()
 
     def rcon_full_wipe(self):
